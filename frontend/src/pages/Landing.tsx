@@ -31,7 +31,7 @@ export default function Landing() {
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold text-indigo-600">StudyFlow</h1>
           <p className="mt-2 text-lg text-gray-600">
-            Upload je cursus, laat AI het werk doen.
+            Upload your course, let AI do the work.
           </p>
         </div>
 
@@ -60,13 +60,13 @@ export default function Landing() {
                 fill="#EA4335"
               />
             </svg>
-            Doorgaan met Google
+            Continue with Google
           </button>
 
           {/* Divider */}
           <div className="my-6 flex items-center gap-4">
             <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-sm text-gray-400">of</span>
+            <span className="text-sm text-gray-400">or</span>
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
@@ -74,7 +74,7 @@ export default function Landing() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
               type="email"
-              placeholder="E-mailadres"
+              placeholder="Email address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -82,7 +82,7 @@ export default function Landing() {
             />
             <input
               type="password"
-              placeholder="Wachtwoord"
+              placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -100,15 +100,15 @@ export default function Landing() {
               className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
             >
               {loading
-                ? "Even geduld..."
+                ? "Please wait..."
                 : isSignUp
-                  ? "Account aanmaken"
-                  : "Inloggen"}
+                  ? "Create account"
+                  : "Sign in"}
             </button>
           </form>
 
           <p className="mt-4 text-center text-sm text-gray-500">
-            {isSignUp ? "Heb je al een account?" : "Nog geen account?"}{" "}
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp);
@@ -116,7 +116,7 @@ export default function Landing() {
               }}
               className="font-medium text-indigo-600 hover:underline"
             >
-              {isSignUp ? "Inloggen" : "Registreren"}
+              {isSignUp ? "Sign in" : "Sign up"}
             </button>
           </p>
         </div>

@@ -43,7 +43,7 @@ export default function Dashboard() {
       await apiUpload("/api/courses/upload", formData);
       await loadCourses();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload mislukt");
+      setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -51,10 +51,10 @@ export default function Dashboard() {
   };
 
   const statusLabel: Record<string, string> = {
-    uploaded: "Geupload",
-    processing: "Wordt verwerkt...",
-    ready: "Klaar",
-    error: "Fout",
+    uploaded: "Uploaded",
+    processing: "Processing...",
+    ready: "Ready",
+    error: "Error",
   };
 
   const statusColor: Record<string, string> = {
@@ -76,7 +76,7 @@ export default function Dashboard() {
               onClick={signOut}
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
             >
-              Uitloggen
+              Sign out
             </button>
           </div>
         </div>
@@ -85,9 +85,9 @@ export default function Dashboard() {
       {/* Content */}
       <main className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-8 flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Mijn cursussen</h2>
+          <h2 className="text-2xl font-semibold">My courses</h2>
           <label className="cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-700">
-            {uploading ? "Uploaden..." : "PDF uploaden"}
+            {uploading ? "Uploading..." : "Upload PDF"}
             <input
               ref={fileInputRef}
               type="file"
@@ -108,7 +108,7 @@ export default function Dashboard() {
         {courses.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
             <p className="text-lg text-gray-500">
-              Nog geen cursussen. Upload je eerste PDF!
+              No courses yet. Upload your first PDF!
             </p>
           </div>
         ) : (
@@ -121,7 +121,7 @@ export default function Dashboard() {
                 <div>
                   <h3 className="font-medium">{course.title}</h3>
                   <p className="text-sm text-gray-500">
-                    {new Date(course.created_at).toLocaleDateString("nl-BE")}
+                    {new Date(course.created_at).toLocaleDateString("en-GB")}
                   </p>
                 </div>
                 <span
