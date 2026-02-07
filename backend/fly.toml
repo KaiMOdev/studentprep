@@ -1,0 +1,18 @@
+app = "studyflow-api"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  # All secrets are set via: fly secrets set KEY=value
+  # NEVER put actual secret values here

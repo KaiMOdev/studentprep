@@ -1,0 +1,25 @@
+{
+  "name": "studyflow-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@hono/node-server": "^1.13.7",
+    "@supabase/supabase-js": "^2.49.1",
+    "hono": "^4.6.0",
+    "stripe": "^17.5.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

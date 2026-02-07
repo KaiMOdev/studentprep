@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Fly.io local state
+.fly/
+
+# Supabase local
+.supabase/
