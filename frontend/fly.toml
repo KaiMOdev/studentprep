@@ -1,0 +1,19 @@
+app = "studyflow-app"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+  # Build args — these are baked into the static JS bundle at build time.
+  # They are PUBLIC keys only (anon key, publishable key). Never put secrets here.
+  [build.args]
+    VITE_SUPABASE_URL = ""
+    VITE_SUPABASE_ANON_KEY = ""
+    VITE_API_URL = "https://studyflow-api.fly.dev"
+    VITE_STRIPE_PUBLISHABLE_KEY = ""
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
