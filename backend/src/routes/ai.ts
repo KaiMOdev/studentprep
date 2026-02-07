@@ -116,6 +116,41 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
   return c.json({ questions });
 });
 
+// Get existing study plans for a course
+aiRoutes.get("/study-plans/:courseId", async (c) => {
+  const userId = c.get("userId");
+  const courseId = c.req.param("courseId");
+  const supabase = getSupabaseAdmin();
+
+  const { data: plans } = await supabase
+    .from("study_plans")
+    .select("*")
+    .eq("course_id", courseId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  return c.json({ plans: plans || [] });
+});
+
+// Delete a study plan
+aiRoutes.delete("/study-plan/:planId", async (c) => {
+  const userId = c.get("userId");
+  const planId = c.req.param("planId");
+  const supabase = getSupabaseAdmin();
+
+  const { error } = await supabase
+    .from("study_plans")
+    .delete()
+    .eq("id", planId)
+    .eq("user_id", userId);
+
+  if (error) {
+    return c.json({ error: error.message }, 500);
+  }
+
+  return c.json({ message: "Plan deleted" });
+});
+
 // Generate study plan
 aiRoutes.post("/study-plan", async (c) => {
   const userId = c.get("userId");

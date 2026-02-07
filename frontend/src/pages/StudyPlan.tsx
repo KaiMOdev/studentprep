@@ -19,29 +19,36 @@ interface Plan {
 export default function StudyPlan() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
-  const [plan, setPlan] = useState<Plan | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [activePlan, setActivePlan] = useState<Plan | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [examDate, setExamDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState(3);
   const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadPlan = useCallback(async () => {
+  const loadPlans = useCallback(async () => {
     if (!courseId) return;
     try {
-      // Try to load existing plan
-      const data = await apiFetch<{ course: any; chapters: any[] }>(
-        `/api/courses/${courseId}`
+      const data = await apiFetch<{ plans: Plan[] }>(
+        `/api/ai/study-plans/${courseId}`
       );
-      // Check if plan exists via a separate call would be complex,
-      // so we'll just show the create form if no plan is loaded
+      setPlans(data.plans);
+      // Auto-select the most recent plan
+      if (data.plans.length > 0 && !activePlan) {
+        setActivePlan(data.plans[0]);
+      }
     } catch {
-      // ignore
+      setError("Failed to load study plans");
+    } finally {
+      setLoading(false);
     }
-  }, [courseId]);
+  }, [courseId, activePlan]);
 
   useEffect(() => {
-    loadPlan();
-  }, [loadPlan]);
+    loadPlans();
+  }, [loadPlans]);
 
   const createPlan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,11 +63,26 @@ export default function StudyPlan() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseId, examDate, hoursPerDay }),
       });
-      setPlan(data.plan);
+      setActivePlan(data.plan);
+      setPlans((prev) => [data.plan, ...prev]);
+      setShowForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate plan");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const deletePlan = async (planId: string) => {
+    try {
+      await apiFetch(`/api/ai/study-plan/${planId}`, { method: "DELETE" });
+      setPlans((prev) => prev.filter((p) => p.id !== planId));
+      if (activePlan?.id === planId) {
+        const remaining = plans.filter((p) => p.id !== planId);
+        setActivePlan(remaining.length > 0 ? remaining[0] : null);
+      }
+    } catch {
+      setError("Failed to delete plan");
     }
   };
 
@@ -93,7 +115,15 @@ export default function StudyPlan() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8">
-        <h2 className="mb-6 text-3xl font-bold">Study Plan</h2>
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-3xl font-bold">Study Plans</h2>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            {showForm ? "Cancel" : "New plan"}
+          </button>
+        </div>
 
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -101,13 +131,14 @@ export default function StudyPlan() {
           </div>
         )}
 
-        {!plan && (
+        {/* Create form */}
+        {showForm && (
           <form
             onSubmit={createPlan}
             className="mb-8 rounded-xl bg-white p-6 shadow-sm"
           >
             <h3 className="mb-4 text-lg font-semibold">
-              Generate your study schedule
+              Generate a new study schedule
             </h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -148,21 +179,109 @@ export default function StudyPlan() {
           </form>
         )}
 
-        {plan && (
+        {/* Loading */}
+        {loading && (
+          <div className="flex justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+          </div>
+        )}
+
+        {/* No plans yet */}
+        {!loading && plans.length === 0 && !showForm && (
+          <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-12 text-center">
+            <p className="text-lg text-gray-500">No study plans yet.</p>
+            <p className="mt-1 text-sm text-gray-400">
+              Click "New plan" to generate your first study schedule.
+            </p>
+          </div>
+        )}
+
+        {/* Plan selector (when multiple plans exist) */}
+        {!loading && plans.length > 1 && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            {plans.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setActivePlan(p)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  activePlan?.id === p.id
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Exam:{" "}
+                {new Date(p.exam_date + "T12:00:00").toLocaleDateString(
+                  "en-GB",
+                  { day: "numeric", month: "short" }
+                )}
+                <span className="ml-1 text-xs text-gray-400">
+                  (created{" "}
+                  {new Date(p.created_at).toLocaleDateString("en-GB", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                  )
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Active plan view */}
+        {activePlan && (
           <div className="space-y-3">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm text-gray-500">
-                Exam: {new Date(plan.exam_date).toLocaleDateString("en-GB")}
+                Exam:{" "}
+                {new Date(
+                  activePlan.exam_date + "T12:00:00"
+                ).toLocaleDateString("en-GB", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
               </p>
-              <button
-                onClick={() => setPlan(null)}
-                className="text-sm text-indigo-600 hover:underline"
-              >
-                Create new plan
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setExamDate(activePlan.exam_date);
+                    setShowForm(true);
+                  }}
+                  className="text-sm text-indigo-600 hover:underline"
+                >
+                  Regenerate
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Delete this study plan?")) {
+                      deletePlan(activePlan.id);
+                    }
+                  }}
+                  className="text-sm text-red-500 hover:underline"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
 
-            {plan.plan.map((day, i) => {
+            {/* Legend */}
+            <div className="mb-2 flex gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm border border-indigo-300 bg-indigo-50" />{" "}
+                Study
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm border border-yellow-300 bg-yellow-50" />{" "}
+                Review
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300 bg-gray-50" />{" "}
+                Buffer
+              </span>
+            </div>
+
+            {activePlan.plan.map((day, i) => {
               const isToday = day.date === today;
               const isPast = day.date < today;
 
@@ -174,7 +293,9 @@ export default function StudyPlan() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">
-                        {new Date(day.date + "T12:00:00").toLocaleDateString("en-GB", {
+                        {new Date(
+                          day.date + "T12:00:00"
+                        ).toLocaleDateString("en-GB", {
                           weekday: "short",
                           day: "numeric",
                           month: "short",
@@ -204,18 +325,20 @@ export default function StudyPlan() {
                     </div>
                   </div>
 
-                  {isToday && day.type === "study" && day.chapters.length > 0 && (
-                    <button
-                      onClick={() =>
-                        navigate(
-                          `/quiz/${courseId}?chapters=${day.chapters.map((ch) => ch.id).join(",")}`
-                        )
-                      }
-                      className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                    >
-                      Start quiz for today's chapters
-                    </button>
-                  )}
+                  {isToday &&
+                    day.type === "study" &&
+                    day.chapters.length > 0 && (
+                      <button
+                        onClick={() =>
+                          navigate(
+                            `/quiz/${courseId}?chapters=${day.chapters.map((ch) => ch.id).join(",")}`
+                          )
+                        }
+                        className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                      >
+                        Start quiz for today's chapters
+                      </button>
+                    )}
                 </div>
               );
             })}
