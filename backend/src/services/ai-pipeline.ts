@@ -155,3 +155,44 @@ ${chapterText.slice(0, 30000)}
   const response = await askClaude(system, prompt);
   return parseJsonResponse(response);
 }
+
+export interface StudyPlanDay {
+  date: string;
+  chapters: { id: string; title: string }[];
+  total_minutes: number;
+  type: "study" | "review" | "buffer";
+}
+
+/**
+ * Generate a study plan for a course.
+ */
+export async function generateStudyPlan(
+  chapters: { id: string; title: string }[],
+  examDate: string,
+  hoursPerDay: number
+): Promise<StudyPlanDay[]> {
+  const system = `You create realistic study schedules. Return ONLY valid JSON, no markdown fences. Use ISO date format (YYYY-MM-DD).`;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const prompt = `Create a study plan for a student with these parameters:
+
+- Today: ${today}
+- Exam date: ${examDate}
+- Available study hours per day: ${hoursPerDay}
+- Chapters to cover:
+${chapters.map((ch, i) => `  ${i + 1}. "${ch.title}" (id: "${ch.id}")`).join("\n")}
+
+Rules:
+- Spread chapters evenly across available days
+- Include 1-2 review days before the exam
+- Add a buffer day if there's enough time
+- Each day should have a realistic workload
+- Don't schedule study on the exam day itself
+
+Return a JSON array:
+[{"date": "YYYY-MM-DD", "chapters": [{"id": "...", "title": "..."}], "total_minutes": 120, "type": "study|review|buffer"}]`;
+
+  const response = await askClaude(system, prompt);
+  return parseJsonResponse(response);
+}

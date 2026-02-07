@@ -6,6 +6,7 @@ import {
   detectChapters,
   summarizeChapter,
   generateQuestions,
+  generateStudyPlan,
 } from "../services/ai-pipeline.js";
 import type { AuthEnv } from "../types.js";
 
@@ -115,9 +116,60 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
   return c.json({ questions });
 });
 
-// Study plan — still Phase 3
+// Generate study plan
 aiRoutes.post("/study-plan", async (c) => {
-  return c.json({ message: "Study plan generation — coming in Phase 3" }, 501);
+  const userId = c.get("userId");
+  const supabase = getSupabaseAdmin();
+
+  const body = await c.req.json();
+  const { courseId, examDate, hoursPerDay } = body;
+
+  if (!courseId || !examDate || !hoursPerDay) {
+    return c.json({ error: "courseId, examDate, and hoursPerDay are required" }, 400);
+  }
+
+  // Verify ownership
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("user_id", userId)
+    .single();
+
+  if (!course) {
+    return c.json({ error: "Course not found" }, 404);
+  }
+
+  // Get chapters
+  const { data: chapters } = await supabase
+    .from("chapters")
+    .select("id, title")
+    .eq("course_id", courseId)
+    .order("sort_order");
+
+  if (!chapters || chapters.length === 0) {
+    return c.json({ error: "Course has no chapters. Process it first." }, 400);
+  }
+
+  const plan = await generateStudyPlan(chapters, examDate, hoursPerDay);
+
+  // Save plan
+  const { data: savedPlan, error: insertError } = await supabase
+    .from("study_plans")
+    .insert({
+      user_id: userId,
+      course_id: courseId,
+      exam_date: examDate,
+      plan,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    return c.json({ error: insertError.message }, 500);
+  }
+
+  return c.json({ plan: savedPlan }, 201);
 });
 
 // ---- Background processing pipeline ----

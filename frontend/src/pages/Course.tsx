@@ -180,6 +180,28 @@ export default function Course() {
           </div>
         )}
 
+        {/* Action buttons */}
+        {isReady && chapters.length > 0 && (
+          <div className="mb-8 flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate(`/study-plan/${id}`)}
+              className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700"
+            >
+              Create Study Plan
+            </button>
+            <button
+              onClick={() =>
+                navigate(
+                  `/quiz/${id}?chapters=${chapters.map((c) => c.id).join(",")}`
+                )
+              }
+              className="rounded-lg border border-indigo-300 bg-indigo-50 px-5 py-2.5 font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              Start Quiz (all chapters)
+            </button>
+          </div>
+        )}
+
         {/* Chapters */}
         {isReady && chapters.length > 0 && (
           <div className="space-y-4">

@@ -3,6 +3,8 @@ import { useAuth } from "./hooks/useAuth";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Course from "./pages/Course";
+import StudyPlan from "./pages/StudyPlan";
+import Quiz from "./pages/Quiz";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -28,6 +30,14 @@ export default function App() {
       <Route
         path="/course/:id"
         element={user ? <Course /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/study-plan/:courseId"
+        element={user ? <StudyPlan /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/quiz/:courseId"
+        element={user ? <Quiz /> : <Navigate to="/" />}
       />
     </Routes>
   );
