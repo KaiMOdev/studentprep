@@ -16,6 +16,15 @@ export interface GeneratedQuestions {
 }
 
 /**
+ * Strip markdown code fences from Claude's response and parse JSON.
+ */
+function parseJsonResponse<T>(text: string): T {
+  // Remove ```json ... ``` or ``` ... ``` wrappers
+  const stripped = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+  return JSON.parse(stripped);
+}
+
+/**
  * Split raw PDF text into chapters using Claude.
  */
 export async function detectChapters(fullText: string): Promise<ChapterData[]> {
@@ -38,7 +47,7 @@ ${fullText.slice(0, 80000)}
 ---`;
 
   const response = await askClaude(system, prompt);
-  return JSON.parse(response);
+  return parseJsonResponse(response);
 }
 
 /**
@@ -66,7 +75,7 @@ ${chapterText.slice(0, 30000)}
 ---`;
 
   const response = await askClaude(system, prompt);
-  return JSON.parse(response);
+  return parseJsonResponse(response);
 }
 
 /**
@@ -98,5 +107,5 @@ ${chapterText.slice(0, 30000)}
 ---`;
 
   const response = await askClaude(system, prompt);
-  return JSON.parse(response);
+  return parseJsonResponse(response);
 }

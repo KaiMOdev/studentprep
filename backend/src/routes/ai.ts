@@ -35,6 +35,17 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
     return c.json({ error: "Course is already being processed" }, 409);
   }
 
+  // Clear old chapters/questions if retrying
+  const { data: oldChapters } = await supabase
+    .from("chapters")
+    .select("id")
+    .eq("course_id", courseId);
+  if (oldChapters && oldChapters.length > 0) {
+    const oldIds = oldChapters.map((ch: any) => ch.id);
+    await supabase.from("questions").delete().in("chapter_id", oldIds);
+    await supabase.from("chapters").delete().eq("course_id", courseId);
+  }
+
   // Mark as processing
   await supabase
     .from("courses")
