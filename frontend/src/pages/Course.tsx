@@ -44,6 +44,7 @@ export default function Course() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
 
   const loadCourse = useCallback(async () => {
@@ -84,6 +85,19 @@ export default function Course() {
       setError(err instanceof Error ? err.message : "Processing failed");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const cancelProcessing = async () => {
+    if (!id) return;
+    setCancelling(true);
+    try {
+      await apiFetch(`/api/ai/cancel/${id}`, { method: "POST" });
+      await loadCourse();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel");
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -162,6 +176,13 @@ export default function Course() {
               Extracting text, detecting chapters, summarizing, generating
               questions...
             </p>
+            <button
+              onClick={cancelProcessing}
+              disabled={cancelling}
+              className="mt-4 rounded-lg border border-red-300 bg-white px-5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {cancelling ? "Stopping..." : "Stop processing"}
+            </button>
           </div>
         )}
 
@@ -176,6 +197,28 @@ export default function Course() {
               className="mt-4 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
             >
               {processing ? "Starting..." : "Retry"}
+            </button>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {isReady && chapters.length > 0 && (
+          <div className="mb-8 flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate(`/study-plan/${id}`)}
+              className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700"
+            >
+              Create Study Plan
+            </button>
+            <button
+              onClick={() =>
+                navigate(
+                  `/quiz/${id}?chapters=${chapters.map((c) => c.id).join(",")}`
+                )
+              }
+              className="rounded-lg border border-indigo-300 bg-indigo-50 px-5 py-2.5 font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              Start Quiz (all chapters)
             </button>
           </div>
         )}

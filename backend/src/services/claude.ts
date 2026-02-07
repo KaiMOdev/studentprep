@@ -15,13 +15,14 @@ function getClient(): Anthropic {
 
 export async function askClaude(
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  maxTokens: number = 8192
 ): Promise<string> {
   const anthropic = getClient();
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-5-20250929",
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
