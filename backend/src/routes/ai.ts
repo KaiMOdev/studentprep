@@ -12,6 +12,9 @@ import type { AuthEnv } from "../types.js";
 
 export const aiRoutes = new Hono<AuthEnv>();
 
+// Track cancellable processing jobs
+const cancelledCourses = new Set<string>();
+
 aiRoutes.use("*", requireAuth);
 
 // Process a course: extract text → detect chapters → summarize → generate questions
@@ -53,8 +56,16 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
     .update({ status: "processing" })
     .eq("id", courseId);
 
+  // Clear any stale cancellation flag
+  cancelledCourses.delete(courseId);
+
   // Run pipeline in background (don't block the response)
   processCourse(courseId, course.storage_path).catch(async (err) => {
+    // Don't set error status if it was a cancellation
+    if (cancelledCourses.has(courseId)) {
+      cancelledCourses.delete(courseId);
+      return;
+    }
     console.error(`Processing failed for course ${courseId}:`, err);
     await supabase
       .from("courses")
@@ -63,6 +74,51 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
   });
 
   return c.json({ message: "Processing started", courseId });
+});
+
+// Cancel processing
+aiRoutes.post("/cancel/:courseId", async (c) => {
+  const userId = c.get("userId");
+  const courseId = c.req.param("courseId");
+  const supabase = getSupabaseAdmin();
+
+  // Verify ownership
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id, status")
+    .eq("id", courseId)
+    .eq("user_id", userId)
+    .single();
+
+  if (!course) {
+    return c.json({ error: "Course not found" }, 404);
+  }
+
+  if (course.status !== "processing") {
+    return c.json({ error: "Course is not being processed" }, 400);
+  }
+
+  // Signal cancellation
+  cancelledCourses.add(courseId);
+
+  // Reset status to uploaded
+  await supabase
+    .from("courses")
+    .update({ status: "uploaded" })
+    .eq("id", courseId);
+
+  // Clean up any partially created chapters/questions
+  const { data: partialChapters } = await supabase
+    .from("chapters")
+    .select("id")
+    .eq("course_id", courseId);
+  if (partialChapters && partialChapters.length > 0) {
+    const ids = partialChapters.map((ch: any) => ch.id);
+    await supabase.from("questions").delete().in("chapter_id", ids);
+    await supabase.from("chapters").delete().eq("course_id", courseId);
+  }
+
+  return c.json({ message: "Processing cancelled" });
 });
 
 // Generate questions for a specific chapter
@@ -237,6 +293,13 @@ async function processCourse(
 
   // 4. For each chapter: summarize + generate questions
   for (let i = 0; i < chapters.length; i++) {
+    // Check for cancellation between chapters
+    if (cancelledCourses.has(courseId)) {
+      console.log(`Processing cancelled for course ${courseId}`);
+      cancelledCourses.delete(courseId);
+      return;
+    }
+
     const ch = chapters[i];
 
     // Summarize

@@ -44,6 +44,7 @@ export default function Course() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
 
   const loadCourse = useCallback(async () => {
@@ -84,6 +85,19 @@ export default function Course() {
       setError(err instanceof Error ? err.message : "Processing failed");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const cancelProcessing = async () => {
+    if (!id) return;
+    setCancelling(true);
+    try {
+      await apiFetch(`/api/ai/cancel/${id}`, { method: "POST" });
+      await loadCourse();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel");
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -162,6 +176,13 @@ export default function Course() {
               Extracting text, detecting chapters, summarizing, generating
               questions...
             </p>
+            <button
+              onClick={cancelProcessing}
+              disabled={cancelling}
+              className="mt-4 rounded-lg border border-red-300 bg-white px-5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {cancelling ? "Stopping..." : "Stop processing"}
+            </button>
           </div>
         )}
 
