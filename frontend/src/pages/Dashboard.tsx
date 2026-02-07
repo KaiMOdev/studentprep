@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, apiUpload } from "../lib/api";
 
@@ -12,6 +13,7 @@ interface Course {
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -114,9 +116,10 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-3">
             {courses.map((course) => (
-              <div
+              <button
                 key={course.id}
-                className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm"
+                onClick={() => navigate(`/course/${course.id}`)}
+                className="flex w-full items-center justify-between rounded-lg bg-white p-4 shadow-sm text-left transition hover:shadow-md"
               >
                 <div>
                   <h3 className="font-medium">{course.title}</h3>
@@ -129,7 +132,7 @@ export default function Dashboard() {
                 >
                   {statusLabel[course.status] || course.status}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}

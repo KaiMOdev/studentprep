@@ -49,7 +49,18 @@ courseRoutes.get("/:id", async (c) => {
     .eq("course_id", courseId)
     .order("sort_order");
 
-  return c.json({ course, chapters: chapters || [] });
+  // Fetch questions for all chapters
+  const chapterIds = (chapters || []).map((ch: any) => ch.id);
+  let questions: any[] = [];
+  if (chapterIds.length > 0) {
+    const { data } = await supabase
+      .from("questions")
+      .select("id, chapter_id, type, question, suggested_answer")
+      .in("chapter_id", chapterIds);
+    questions = data || [];
+  }
+
+  return c.json({ course, chapters: chapters || [], questions });
 });
 
 // Upload course PDF
