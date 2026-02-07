@@ -3,6 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, apiUpload } from "../lib/api";
 
+interface StudyPlanSummary {
+  id: string;
+  exam_date: string;
+  created_at: string;
+  course_id: string;
+}
+
 interface Course {
   id: string;
   title: string;
@@ -15,6 +22,9 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [plansByCourse, setPlansByCourse] = useState<
+    Record<string, StudyPlanSummary[]>
+  >({});
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,9 +38,38 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Load study plans for all ready courses
+  const loadPlans = useCallback(async (courseList: Course[]) => {
+    const readyCourses = courseList.filter((c) => c.status === "ready");
+    if (readyCourses.length === 0) return;
+
+    const results: Record<string, StudyPlanSummary[]> = {};
+    await Promise.all(
+      readyCourses.map(async (course) => {
+        try {
+          const data = await apiFetch<{ plans: StudyPlanSummary[] }>(
+            `/api/ai/study-plans/${course.id}`
+          );
+          if (data.plans.length > 0) {
+            results[course.id] = data.plans;
+          }
+        } catch {
+          // ignore per-course failures
+        }
+      })
+    );
+    setPlansByCourse(results);
+  }, []);
+
   useEffect(() => {
     loadCourses();
   }, [loadCourses]);
+
+  useEffect(() => {
+    if (courses.length > 0) {
+      loadPlans(courses);
+    }
+  }, [courses, loadPlans]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,6 +103,17 @@ export default function Dashboard() {
     processing: "bg-blue-100 text-blue-800",
     ready: "bg-green-100 text-green-800",
     error: "bg-red-100 text-red-800",
+  };
+
+  const daysUntil = (dateStr: string) => {
+    const diff = Math.ceil(
+      (new Date(dateStr + "T12:00:00").getTime() - Date.now()) /
+        (1000 * 60 * 60 * 24)
+    );
+    if (diff < 0) return "past";
+    if (diff === 0) return "today";
+    if (diff === 1) return "tomorrow";
+    return `in ${diff} days`;
   };
 
   return (
@@ -115,25 +165,88 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {courses.map((course) => (
-              <button
-                key={course.id}
-                onClick={() => navigate(`/course/${course.id}`)}
-                className="flex w-full items-center justify-between rounded-lg bg-white p-4 shadow-sm text-left transition hover:shadow-md"
-              >
-                <div>
-                  <h3 className="font-medium">{course.title}</h3>
-                  <p className="text-sm text-gray-500">
-                    {new Date(course.created_at).toLocaleDateString("en-GB")}
-                  </p>
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${statusColor[course.status] || ""}`}
+            {courses.map((course) => {
+              const coursePlans = plansByCourse[course.id];
+              const nextPlan = coursePlans?.[0]; // most recent plan
+
+              return (
+                <div
+                  key={course.id}
+                  className="rounded-lg bg-white shadow-sm transition hover:shadow-md"
                 >
-                  {statusLabel[course.status] || course.status}
-                </span>
-              </button>
-            ))}
+                  {/* Course row */}
+                  <button
+                    onClick={() => navigate(`/course/${course.id}`)}
+                    className="flex w-full items-center justify-between p-4 text-left"
+                  >
+                    <div>
+                      <h3 className="font-medium">{course.title}</h3>
+                      <p className="text-sm text-gray-500">
+                        {new Date(course.created_at).toLocaleDateString(
+                          "en-GB"
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${statusColor[course.status] || ""}`}
+                    >
+                      {statusLabel[course.status] || course.status}
+                    </span>
+                  </button>
+
+                  {/* Study plan info */}
+                  {nextPlan && (
+                    <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="inline-block h-2 w-2 rounded-full bg-indigo-400" />
+                        <span>
+                          Exam{" "}
+                          {new Date(
+                            nextPlan.exam_date + "T12:00:00"
+                          ).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                          })}{" "}
+                          <span className="text-gray-400">
+                            ({daysUntil(nextPlan.exam_date)})
+                          </span>
+                        </span>
+                        {coursePlans.length > 1 && (
+                          <span className="text-xs text-gray-400">
+                            +{coursePlans.length - 1} more plan
+                            {coursePlans.length > 2 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/study-plan/${course.id}`);
+                        }}
+                        className="rounded-md bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
+                      >
+                        View plan
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Quick actions for ready courses without plans */}
+                  {course.status === "ready" && !nextPlan && (
+                    <div className="border-t border-gray-100 px-4 py-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/study-plan/${course.id}`);
+                        }}
+                        className="text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        Create a study plan
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
