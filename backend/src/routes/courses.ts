@@ -49,52 +49,75 @@ courseRoutes.get("/:id", async (c) => {
     .eq("course_id", courseId)
     .order("sort_order");
 
-  return c.json({ course, chapters: chapters || [] });
+  // Fetch questions for all chapters
+  const chapterIds = (chapters || []).map((ch: any) => ch.id);
+  let questions: any[] = [];
+  if (chapterIds.length > 0) {
+    const { data } = await supabase
+      .from("questions")
+      .select("id, chapter_id, type, question, suggested_answer")
+      .in("chapter_id", chapterIds);
+    questions = data || [];
+  }
+
+  return c.json({ course, chapters: chapters || [], questions });
 });
 
 // Upload course PDF
 courseRoutes.post("/upload", async (c) => {
-  const userId = c.get("userId");
-  const supabase = getSupabaseAdmin();
+  try {
+    const userId = c.get("userId");
+    const supabase = getSupabaseAdmin();
 
-  const formData = await c.req.formData();
-  const file = formData.get("file") as File | null;
+    console.log("[upload] Parsing form data...");
+    const formData = await c.req.formData();
+    const file = formData.get("file") as File | null;
 
-  if (!file || file.type !== "application/pdf") {
-    return c.json({ error: "Please upload a PDF file" }, 400);
+    if (!file || file.type !== "application/pdf") {
+      return c.json({ error: "Please upload a PDF file" }, 400);
+    }
+
+    console.log(`[upload] File: ${file.name} (${file.size} bytes)`);
+    const filename = file.name;
+    const storagePath = `${userId}/${Date.now()}-${filename}`;
+
+    // Upload to Supabase Storage
+    const buffer = Buffer.from(await file.arrayBuffer());
+    console.log("[upload] Uploading to Supabase Storage...");
+    const { error: uploadError } = await supabase.storage
+      .from("course-pdfs")
+      .upload(storagePath, buffer, { contentType: "application/pdf" });
+
+    if (uploadError) {
+      console.error("[upload] Storage error:", uploadError);
+      return c.json({ error: `Storage upload failed: ${uploadError.message}` }, 500);
+    }
+
+    // Create course record
+    console.log("[upload] Creating course record...");
+    const { data: course, error: insertError } = await supabase
+      .from("courses")
+      .insert({
+        user_id: userId,
+        title: filename.replace(/\.pdf$/i, ""),
+        original_filename: filename,
+        storage_path: storagePath,
+        status: "uploaded",
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("[upload] DB insert error:", insertError);
+      return c.json({ error: insertError.message }, 500);
+    }
+
+    console.log("[upload] Success:", course.id);
+    return c.json({ course }, 201);
+  } catch (err) {
+    console.error("[upload] Unexpected error:", err);
+    return c.json({ error: "Upload failed unexpectedly" }, 500);
   }
-
-  const filename = file.name;
-  const storagePath = `${userId}/${Date.now()}-${filename}`;
-
-  // Upload to Supabase Storage
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage
-    .from("course-pdfs")
-    .upload(storagePath, buffer, { contentType: "application/pdf" });
-
-  if (uploadError) {
-    return c.json({ error: "Failed to upload file" }, 500);
-  }
-
-  // Create course record
-  const { data: course, error: insertError } = await supabase
-    .from("courses")
-    .insert({
-      user_id: userId,
-      title: filename.replace(/\.pdf$/i, ""),
-      original_filename: filename,
-      storage_path: storagePath,
-      status: "uploaded",
-    })
-    .select()
-    .single();
-
-  if (insertError) {
-    return c.json({ error: insertError.message }, 500);
-  }
-
-  return c.json({ course }, 201);
 });
 
 // Delete course
