@@ -24,22 +24,29 @@ function parseJsonResponse<T>(text: string): T {
   return JSON.parse(stripped);
 }
 
+interface ChapterBoundary {
+  title: string;
+  start_text: string;
+}
+
 /**
  * Split raw PDF text into chapters using Claude.
+ * Step 1: Ask Claude for chapter titles + first ~60 chars of each chapter.
+ * Step 2: Use those markers to split the full text locally.
  */
 export async function detectChapters(fullText: string): Promise<ChapterData[]> {
-  const system = `You split course/textbook text into chapters. Return ONLY valid JSON, no markdown fences.`;
+  const system = `You identify chapter boundaries in course text. Return ONLY valid JSON, no markdown fences.`;
 
-  const prompt = `Analyze this course text and split it into chapters. Identify chapter boundaries based on headings, numbering, or topic shifts.
+  const prompt = `Analyze this course text and identify where each chapter starts.
 
-Return a JSON array of objects: [{"title": "Chapter title", "content": "Full text of this chapter..."}]
+Return a JSON array: [{"title": "Chapter title", "start_text": "first 50-60 characters of that chapter exactly as they appear"}]
 
 Rules:
-- Keep the original text intact in "content" (don't summarize yet)
-- If there are no clear chapters, split by major topic shifts
-- Each chapter should be a meaningful unit of study
+- "start_text" must be an EXACT substring from the text (I will use it to find the position)
+- Include enough characters to be unique (50-60 chars)
 - Maximum 20 chapters
-- If the text is very short (< 500 words), return it as a single chapter
+- If there are no clear chapters, split by major topic shifts
+- If the text is very short, return a single chapter
 
 Text:
 ---
@@ -47,7 +54,46 @@ ${fullText.slice(0, 80000)}
 ---`;
 
   const response = await askClaude(system, prompt);
-  return parseJsonResponse(response);
+  const boundaries: ChapterBoundary[] = parseJsonResponse(response);
+
+  // Split the full text using the boundary markers
+  const chapters: ChapterData[] = [];
+
+  for (let i = 0; i < boundaries.length; i++) {
+    const boundary = boundaries[i];
+    const startIdx = fullText.indexOf(boundary.start_text);
+
+    let content: string;
+    if (startIdx === -1) {
+      // Marker not found — skip or use remaining text for last entry
+      if (i === 0) {
+        // First chapter not found, use full text as single chapter
+        return [{ title: boundary.title, content: fullText }];
+      }
+      continue;
+    }
+
+    if (i < boundaries.length - 1) {
+      // Find where the next chapter starts
+      const nextBoundary = boundaries[i + 1];
+      const nextIdx = fullText.indexOf(nextBoundary.start_text, startIdx + 1);
+      content = nextIdx !== -1
+        ? fullText.slice(startIdx, nextIdx)
+        : fullText.slice(startIdx);
+    } else {
+      // Last chapter — take everything until the end
+      content = fullText.slice(startIdx);
+    }
+
+    chapters.push({ title: boundary.title, content: content.trim() });
+  }
+
+  // Fallback: if no chapters were created, use full text as one chapter
+  if (chapters.length === 0) {
+    return [{ title: "Full Course", content: fullText }];
+  }
+
+  return chapters;
 }
 
 /**
