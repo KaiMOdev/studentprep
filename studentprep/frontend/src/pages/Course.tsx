@@ -21,12 +21,63 @@ interface Chapter {
   sort_order: number;
 }
 
+interface Translations {
+  nl?: string;
+  fr?: string;
+}
+
 interface Question {
   id: string;
   chapter_id: string;
   type: "exam" | "discussion";
   question: string;
   suggested_answer: string;
+  question_translations?: Translations;
+  answer_translations?: Translations;
+}
+
+type Language = "en" | "nl" | "fr";
+
+const LANGUAGE_LABELS: Record<Language, string> = {
+  en: "English",
+  nl: "Nederlands",
+  fr: "Français",
+};
+
+function LanguageDropdown({
+  value,
+  onChange,
+  label,
+}: {
+  value: Language;
+  onChange: (lang: Language) => void;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-gray-500">
+      <span>{label}:</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as Language)}
+        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+        {(Object.keys(LANGUAGE_LABELS) as Language[]).map((lang) => (
+          <option key={lang} value={lang}>
+            {LANGUAGE_LABELS[lang]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function getTranslatedText(
+  original: string,
+  translations: Translations | undefined,
+  lang: Language
+): string {
+  if (lang === "en") return original;
+  return translations?.[lang] || original;
 }
 
 interface CourseData {
@@ -434,19 +485,49 @@ export default function Course() {
 
 function ExamQuestion({ index, q }: { index: number; q: Question }) {
   const [showAnswer, setShowAnswer] = useState(false);
+  const [questionLang, setQuestionLang] = useState<Language>("en");
+  const [answerLang, setAnswerLang] = useState<Language>("en");
+
+  const translatedQuestion = getTranslatedText(
+    q.question,
+    q.question_translations,
+    questionLang
+  );
+  const translatedAnswer = getTranslatedText(
+    q.suggested_answer,
+    q.answer_translations,
+    answerLang
+  );
+
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-      <p className="font-medium text-indigo-900">
-        {index}. {q.question}
-      </p>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <p className="font-medium text-indigo-900">
+          {index}. {translatedQuestion}
+        </p>
+        <LanguageDropdown
+          value={questionLang}
+          onChange={setQuestionLang}
+          label="Q"
+        />
+      </div>
       <button
         onClick={() => setShowAnswer(!showAnswer)}
-        className="mt-2 text-sm font-medium text-indigo-600 hover:underline"
+        className="mt-1 text-sm font-medium text-indigo-600 hover:underline"
       >
         {showAnswer ? "Hide answer" : "Show suggested answer"}
       </button>
       {showAnswer && (
-        <p className="mt-2 text-sm text-gray-700">{q.suggested_answer}</p>
+        <div className="mt-2">
+          <div className="mb-1 flex justify-end">
+            <LanguageDropdown
+              value={answerLang}
+              onChange={setAnswerLang}
+              label="A"
+            />
+          </div>
+          <p className="text-sm text-gray-700">{translatedAnswer}</p>
+        </div>
       )}
     </div>
   );
@@ -454,19 +535,49 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
 
 function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
   const [showWhy, setShowWhy] = useState(false);
+  const [questionLang, setQuestionLang] = useState<Language>("en");
+  const [answerLang, setAnswerLang] = useState<Language>("en");
+
+  const translatedQuestion = getTranslatedText(
+    q.question,
+    q.question_translations,
+    questionLang
+  );
+  const translatedAnswer = getTranslatedText(
+    q.suggested_answer,
+    q.answer_translations,
+    answerLang
+  );
+
   return (
     <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
-      <p className="font-medium text-purple-900">
-        {index}. {q.question}
-      </p>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <p className="font-medium text-purple-900">
+          {index}. {translatedQuestion}
+        </p>
+        <LanguageDropdown
+          value={questionLang}
+          onChange={setQuestionLang}
+          label="Q"
+        />
+      </div>
       <button
         onClick={() => setShowWhy(!showWhy)}
-        className="mt-2 text-sm font-medium text-purple-600 hover:underline"
+        className="mt-1 text-sm font-medium text-purple-600 hover:underline"
       >
         {showWhy ? "Hide" : "Why ask this?"}
       </button>
       {showWhy && (
-        <p className="mt-2 text-sm text-gray-700">{q.suggested_answer}</p>
+        <div className="mt-2">
+          <div className="mb-1 flex justify-end">
+            <LanguageDropdown
+              value={answerLang}
+              onChange={setAnswerLang}
+              label="A"
+            />
+          </div>
+          <p className="text-sm text-gray-700">{translatedAnswer}</p>
+        </div>
       )}
     </div>
   );
