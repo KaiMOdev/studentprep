@@ -36,6 +36,13 @@ interface CourseData {
   created_at: string;
 }
 
+interface ProcessingProgress {
+  step: "extracting" | "detecting" | "processing_chapter" | "done" | "unknown";
+  currentChapter: number;
+  totalChapters: number;
+  chapterTitle: string;
+}
+
 export default function Course() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -46,6 +53,7 @@ export default function Course() {
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<ProcessingProgress | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -69,10 +77,28 @@ export default function Course() {
 
   // Poll while processing
   useEffect(() => {
-    if (course?.status !== "processing") return;
-    const interval = setInterval(loadCourse, 5000);
-    return () => clearInterval(interval);
-  }, [course?.status, loadCourse]);
+    if (course?.status !== "processing") {
+      setProgress(null);
+      return;
+    }
+
+    const pollProgress = async () => {
+      try {
+        const data = await apiFetch<ProcessingProgress>(`/api/ai/progress/${id}`);
+        setProgress(data);
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    pollProgress();
+    const progressInterval = setInterval(pollProgress, 2000);
+    const courseInterval = setInterval(loadCourse, 5000);
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(courseInterval);
+    };
+  }, [course?.status, loadCourse, id]);
 
   const startProcessing = async () => {
     if (!id) return;
@@ -167,22 +193,65 @@ export default function Course() {
         )}
 
         {isProcessing && (
-          <div className="mb-8 rounded-xl bg-blue-50 p-8 text-center">
-            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-            <p className="text-lg text-blue-700">
-              Processing your course... This may take a few minutes.
-            </p>
-            <p className="mt-2 text-sm text-blue-500">
-              Extracting text, detecting chapters, summarizing, generating
-              questions...
-            </p>
-            <button
-              onClick={cancelProcessing}
-              disabled={cancelling}
-              className="mt-4 rounded-lg border border-red-300 bg-white px-5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              {cancelling ? "Stopping..." : "Stop processing"}
-            </button>
+          <div className="mb-8 rounded-xl bg-blue-50 p-8">
+            {/* Step label */}
+            <div className="mb-3 flex items-center justify-center gap-2">
+              <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
+              <p className="text-lg font-medium text-blue-700">
+                {!progress || progress.step === "unknown"
+                  ? "Starting..."
+                  : progress.step === "extracting"
+                    ? "Extracting text from PDF..."
+                    : progress.step === "detecting"
+                      ? "Detecting chapters..."
+                      : progress.step === "processing_chapter"
+                        ? `Processing chapter ${progress.currentChapter} of ${progress.totalChapters}`
+                        : "Finishing up..."}
+              </p>
+            </div>
+
+            {/* Chapter title */}
+            {progress?.step === "processing_chapter" && progress.chapterTitle && (
+              <p className="mb-4 text-center text-sm text-blue-600 truncate">
+                {progress.chapterTitle}
+              </p>
+            )}
+
+            {/* Progress bar */}
+            {progress && progress.totalChapters > 0 ? (
+              <div className="mx-auto max-w-md">
+                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-200">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                    style={{
+                      width: `${Math.round((progress.currentChapter / progress.totalChapters) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-center text-xs text-blue-500">
+                  {progress.currentChapter} / {progress.totalChapters} chapters
+                </p>
+              </div>
+            ) : (
+              <div className="mx-auto max-w-md">
+                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-200">
+                  <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-400" />
+                </div>
+                <p className="text-center text-xs text-blue-500">
+                  Preparing your course...
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 text-center">
+              <button
+                onClick={cancelProcessing}
+                disabled={cancelling}
+                className="rounded-lg border border-red-300 bg-white px-5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {cancelling ? "Stopping..." : "Stop processing"}
+              </button>
+            </div>
           </div>
         )}
 
