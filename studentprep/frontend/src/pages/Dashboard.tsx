@@ -27,6 +27,7 @@ export default function Dashboard() {
   >({});
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCourses = useCallback(async () => {
@@ -88,6 +89,22 @@ export default function Dashboard() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (courseId: string, courseTitle: string) => {
+    if (!window.confirm(`Delete "${courseTitle}"? This will remove the course and all its data permanently.`)) {
+      return;
+    }
+    setDeletingId(courseId);
+    setError("");
+    try {
+      await apiFetch(`/api/courses/${courseId}`, { method: "DELETE" });
+      await loadCourses();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -175,24 +192,43 @@ export default function Dashboard() {
                   className="rounded-lg bg-white shadow-sm transition hover:shadow-md"
                 >
                   {/* Course row */}
-                  <button
-                    onClick={() => navigate(`/course/${course.id}`)}
-                    className="flex w-full items-center justify-between p-4 text-left"
-                  >
-                    <div>
-                      <h3 className="font-medium">{course.title}</h3>
-                      <p className="text-sm text-gray-500">
-                        {new Date(course.created_at).toLocaleDateString(
-                          "en-GB"
-                        )}
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${statusColor[course.status] || ""}`}
+                  <div className="flex w-full items-center justify-between p-4">
+                    <button
+                      onClick={() => navigate(`/course/${course.id}`)}
+                      className="flex flex-1 items-center justify-between text-left"
                     >
-                      {statusLabel[course.status] || course.status}
-                    </span>
-                  </button>
+                      <div>
+                        <h3 className="font-medium">{course.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          {new Date(course.created_at).toLocaleDateString(
+                            "en-GB"
+                          )}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${statusColor[course.status] || ""}`}
+                      >
+                        {statusLabel[course.status] || course.status}
+                      </span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(course.id, course.title);
+                      }}
+                      disabled={deletingId === course.id}
+                      className="ml-3 rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      title="Delete course"
+                    >
+                      {deletingId === course.id ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
 
                   {/* Study plan info */}
                   {nextPlan && (

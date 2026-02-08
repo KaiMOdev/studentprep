@@ -15,7 +15,42 @@ export const aiRoutes = new Hono<AuthEnv>();
 // Track cancellable processing jobs
 const cancelledCourses = new Set<string>();
 
+// Track processing progress per course
+interface ProcessingProgress {
+  step: "extracting" | "detecting" | "processing_chapter" | "done";
+  currentChapter: number;
+  totalChapters: number;
+  chapterTitle: string;
+}
+const processingProgress = new Map<string, ProcessingProgress>();
+
 aiRoutes.use("*", requireAuth);
+
+// Get processing progress for a course
+aiRoutes.get("/progress/:courseId", async (c) => {
+  const userId = c.get("userId");
+  const courseId = c.req.param("courseId");
+  const supabase = getSupabaseAdmin();
+
+  // Verify ownership
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id, status")
+    .eq("id", courseId)
+    .eq("user_id", userId)
+    .single();
+
+  if (!course) {
+    return c.json({ error: "Course not found" }, 404);
+  }
+
+  const progress = processingProgress.get(courseId);
+  if (!progress) {
+    return c.json({ step: "unknown", currentChapter: 0, totalChapters: 0, chapterTitle: "" });
+  }
+
+  return c.json(progress);
+});
 
 // Process a course: extract text → detect chapters → summarize → generate questions
 aiRoutes.post("/summarize/:courseId", async (c) => {
@@ -61,6 +96,8 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
 
   // Run pipeline in background (don't block the response)
   processCourse(courseId, course.storage_path).catch(async (err) => {
+    processingProgress.delete(courseId);
+
     // Don't set error status if it was a cancellation
     if (cancelledCourses.has(courseId)) {
       cancelledCourses.delete(courseId);
@@ -112,6 +149,7 @@ aiRoutes.post("/cancel/:courseId", async (c) => {
 
   // Signal cancellation
   cancelledCourses.add(courseId);
+  processingProgress.delete(courseId);
 
   // Reset status to uploaded
   await supabase
@@ -283,12 +321,21 @@ async function processCourse(
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
 
+  // Track progress
+  processingProgress.set(courseId, {
+    step: "extracting",
+    currentChapter: 0,
+    totalChapters: 0,
+    chapterTitle: "",
+  });
+
   // 1. Download PDF from storage
   const { data: fileData, error: downloadError } = await supabase.storage
     .from("course-pdfs")
     .download(storagePath);
 
   if (downloadError || !fileData) {
+    processingProgress.delete(courseId);
     throw new Error(`Failed to download PDF: ${downloadError?.message}`);
   }
 
@@ -297,10 +344,18 @@ async function processCourse(
   const fullText = await extractTextFromPdf(buffer);
 
   if (!fullText || fullText.trim().length < 50) {
+    processingProgress.delete(courseId);
     throw new Error("Could not extract enough text from PDF");
   }
 
   // 3. Detect chapters
+  processingProgress.set(courseId, {
+    step: "detecting",
+    currentChapter: 0,
+    totalChapters: 0,
+    chapterTitle: "",
+  });
+
   const chapters = await detectChapters(fullText);
 
   // 4. For each chapter: summarize + generate questions
@@ -309,10 +364,18 @@ async function processCourse(
     if (cancelledCourses.has(courseId)) {
       console.log(`Processing cancelled for course ${courseId}`);
       cancelledCourses.delete(courseId);
+      processingProgress.delete(courseId);
       return;
     }
 
     const ch = chapters[i];
+
+    processingProgress.set(courseId, {
+      step: "processing_chapter",
+      currentChapter: i + 1,
+      totalChapters: chapters.length,
+      chapterTitle: ch.title,
+    });
 
     // Summarize
     const summary = await summarizeChapter(ch.title, ch.content);
@@ -357,8 +420,18 @@ async function processCourse(
   }
 
   // 5. Mark course as ready
+  processingProgress.set(courseId, {
+    step: "done",
+    currentChapter: chapters.length,
+    totalChapters: chapters.length,
+    chapterTitle: "",
+  });
+
   await supabase
     .from("courses")
     .update({ status: "ready" })
     .eq("id", courseId);
+
+  // Clean up progress after a short delay so frontend can see "done"
+  setTimeout(() => processingProgress.delete(courseId), 10000);
 }
