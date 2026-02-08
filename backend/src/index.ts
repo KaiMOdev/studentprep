@@ -7,6 +7,10 @@ import { aiRoutes } from "./routes/ai.js";
 import { quizRoutes } from "./routes/quiz.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { pdfRoutes } from "./routes/pdf.js";
+import { validateConfig, logConfigStatus } from "./services/config.js";
+
+// Validate configuration at startup
+const configStatus = validateConfig();
 
 const app = new Hono();
 
@@ -25,8 +29,37 @@ app.use(
   })
 );
 
-// Health check (no auth required)
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Health check (no auth required) — includes config status for diagnostics
+app.get("/health", (c) =>
+  c.json({
+    status: configStatus.ready ? "ok" : "misconfigured",
+    services: {
+      supabase: configStatus.supabase,
+      anthropic: configStatus.anthropic,
+      stripe: configStatus.stripe,
+    },
+    ...(configStatus.ready
+      ? {}
+      : { hint: "Copy .env.example to .env and set SUPABASE_URL + SUPABASE_SERVICE_KEY" }),
+  })
+);
+
+// Guard: return 503 on all /api/* routes when Supabase is not configured
+app.use("/api/*", async (c, next) => {
+  if (!configStatus.ready) {
+    return c.json(
+      {
+        error: "Server is not configured. Supabase credentials are missing.",
+        missing: configStatus.missing.filter((v) =>
+          ["SUPABASE_URL", "SUPABASE_SERVICE_KEY"].includes(v)
+        ),
+        hint: "Copy backend/.env.example to backend/.env and fill in your Supabase project values.",
+      },
+      503
+    );
+  }
+  await next();
+});
 
 // API routes
 app.route("/api/courses", courseRoutes);
@@ -37,6 +70,8 @@ app.route("/api/pdf", pdfRoutes);
 
 // Start server
 const port = parseInt(process.env.PORT || "8080");
+
+logConfigStatus(configStatus);
 console.log(`StudyFlow API running on port ${port}`);
 
 serve({ fetch: app.fetch, port });
