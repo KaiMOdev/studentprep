@@ -66,7 +66,19 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
       cancelledCourses.delete(courseId);
       return;
     }
-    console.error(`Processing failed for course ${courseId}:`, err);
+
+    const isAuthError =
+      err instanceof Error &&
+      err.message.includes("authentication failed");
+
+    if (isAuthError) {
+      console.error(
+        `Processing failed for course ${courseId}: Anthropic API authentication failed — check ANTHROPIC_API_KEY in .env`
+      );
+    } else {
+      console.error(`Processing failed for course ${courseId}:`, err);
+    }
+
     await supabase
       .from("courses")
       .update({ status: "error" })
