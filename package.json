@@ -2,10 +2,10 @@
   "name": "studyflow",
   "private": true,
   "scripts": {
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "install:all": "cd backend && npm install && cd ../frontend && npm install",
-    "build:all": "cd backend && npm run build && cd ../frontend && npm run build",
-    "typecheck": "cd backend && npm run typecheck && cd ../frontend && npm run typecheck"
+    "dev:backend": "cd studentprep/backend && npm run dev",
+    "dev:frontend": "cd studentprep/frontend && npm run dev",
+    "install:all": "cd studentprep/backend && npm install && cd ../frontend && npm install",
+    "build:all": "cd studentprep/backend && npm run build && cd ../frontend && npm run build",
+    "typecheck": "cd studentprep/backend && npm run typecheck && cd ../frontend && npm run typecheck"
   }
 }

@@ -41,66 +41,69 @@ A web app where students upload their course material (PDF). The AI processes it
 ## Project Structure
 
 ```
-studentprep/
-├── frontend/                    # React PWA (Vite)
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ui/              # Reusable UI components
-│   │   │   ├── course/          # Course upload, chapter view
-│   │   │   ├── quiz/            # Mini exam / quiz UI
-│   │   │   └── planner/         # Study schedule view
-│   │   ├── pages/
-│   │   │   ├── Landing.tsx      # Marketing / login page
-│   │   │   ├── Dashboard.tsx    # Course overview
-│   │   │   ├── Course.tsx       # Single course view (chapters, summary, questions)
-│   │   │   ├── StudyPlan.tsx    # Study schedule
-│   │   │   ├── Quiz.tsx         # Mini exam page
-│   │   │   └── Settings.tsx     # Account, subscription
-│   │   ├── lib/
-│   │   │   ├── supabase.ts      # Supabase client init
-│   │   │   ├── api.ts           # Backend API calls
-│   │   │   └── stripe.ts        # Stripe checkout redirect
-│   │   ├── hooks/
-│   │   │   ├── useAuth.ts       # Supabase auth hook
-│   │   │   └── useCourse.ts     # Course data hook
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── public/
-│   │   └── manifest.json        # PWA manifest
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
-│   ├── package.json
-│   ├── Dockerfile
-│   └── fly.toml
-├── backend/                     # Hono API server
-│   ├── src/
-│   │   ├── index.ts             # App entry, middleware
-│   │   ├── routes/
-│   │   │   ├── courses.ts       # CRUD courses + chapters
-│   │   │   ├── ai.ts            # Claude AI endpoints (summarize, questions, plan)
-│   │   │   ├── quiz.ts          # Quiz generation + scoring
-│   │   │   ├── payments.ts      # Stripe webhooks + checkout
-│   │   │   └── pdf.ts           # PDF generation endpoints
-│   │   ├── services/
-│   │   │   ├── claude.ts        # Claude API wrapper
-│   │   │   ├── pdf-parser.ts    # PDF text extraction
-│   │   │   ├── pdf-generator.ts # Highlighted PDF creation
-│   │   │   ├── wikipedia.ts     # Wikipedia API lookup
-│   │   │   ├── stripe.ts        # Stripe service
-│   │   │   └── quiz.ts          # Quiz logic + spaced repetition
-│   │   └── middleware/
-│   │       └── auth.ts          # Supabase JWT verification
-│   ├── tsconfig.json
-│   ├── package.json
-│   ├── Dockerfile
-│   └── fly.toml
-├── supabase/
-│   └── migrations/              # Database migrations
-│       └── 001_initial.sql
+repo-root/
+├── studentprep/
+│   ├── frontend/                    # React PWA (Vite)
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   │   ├── ui/              # Reusable UI components
+│   │   │   │   ├── course/          # Course upload, chapter view
+│   │   │   │   ├── quiz/            # Mini exam / quiz UI
+│   │   │   │   └── planner/         # Study schedule view
+│   │   │   ├── pages/
+│   │   │   │   ├── Landing.tsx      # Marketing / login page
+│   │   │   │   ├── Dashboard.tsx    # Course overview
+│   │   │   │   ├── Course.tsx       # Single course view (chapters, summary, questions)
+│   │   │   │   ├── StudyPlan.tsx    # Study schedule
+│   │   │   │   ├── Quiz.tsx         # Mini exam page
+│   │   │   │   └── Settings.tsx     # Account, subscription
+│   │   │   ├── lib/
+│   │   │   │   ├── supabase.ts      # Supabase client init
+│   │   │   │   ├── api.ts           # Backend API calls
+│   │   │   │   └── stripe.ts        # Stripe checkout redirect
+│   │   │   ├── hooks/
+│   │   │   │   ├── useAuth.ts       # Supabase auth hook
+│   │   │   │   └── useCourse.ts     # Course data hook
+│   │   │   ├── App.tsx
+│   │   │   └── main.tsx
+│   │   ├── public/
+│   │   │   └── manifest.json        # PWA manifest
+│   │   ├── index.html
+│   │   ├── vite.config.ts
+│   │   ├── tailwind.config.ts
+│   │   ├── tsconfig.json
+│   │   ├── package.json
+│   │   ├── Dockerfile
+│   │   └── fly.toml
+│   ├── backend/                     # Hono API server
+│   │   ├── src/
+│   │   │   ├── index.ts             # App entry, middleware
+│   │   │   ├── routes/
+│   │   │   │   ├── courses.ts       # CRUD courses + chapters
+│   │   │   │   ├── ai.ts            # Claude AI endpoints (summarize, questions, plan)
+│   │   │   │   ├── quiz.ts          # Quiz generation + scoring
+│   │   │   │   ├── payments.ts      # Stripe webhooks + checkout
+│   │   │   │   └── pdf.ts           # PDF generation endpoints
+│   │   │   ├── services/
+│   │   │   │   ├── claude.ts        # Claude API wrapper
+│   │   │   │   ├── pdf-parser.ts    # PDF text extraction
+│   │   │   │   ├── pdf-generator.ts # Highlighted PDF creation
+│   │   │   │   ├── wikipedia.ts     # Wikipedia API lookup
+│   │   │   │   ├── stripe.ts        # Stripe service
+│   │   │   │   └── quiz.ts          # Quiz logic + spaced repetition
+│   │   │   └── middleware/
+│   │   │       └── auth.ts          # Supabase JWT verification
+│   │   ├── tsconfig.json
+│   │   ├── package.json
+│   │   ├── Dockerfile
+│   │   └── fly.toml
+│   └── supabase/
+│       └── migrations/              # Database migrations
+│           └── 001_initial.sql
+├── package.json
 ├── README.md
-└── PLAN.md
+├── PLAN.md
+└── SETUP.md
 ```
 
 ---
