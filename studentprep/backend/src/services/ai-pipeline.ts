@@ -120,15 +120,20 @@ export async function summarizeChapter(
   chapterTitle: string,
   chapterText: string
 ): Promise<ChapterSummary> {
-  const system = `You are a study assistant that creates structured summaries. Return ONLY valid JSON, no markdown fences. Keep language consistent with the source material.`;
+  const system = `You are a study assistant that creates structured summaries strictly based on the provided course material. Return ONLY valid JSON, no markdown fences. Keep language consistent with the source material.`;
 
-  const prompt = `Analyze this chapter and provide a structured summary.
+  const prompt = `Analyze this chapter and provide a structured summary based ONLY on the content provided below.
 
 1. MAIN TOPICS: The core concepts a student MUST know for an exam.
    Return as: {"topic": "...", "explanation": "...", "key_terms": ["..."]}
 
 2. SIDE TOPICS: Supporting details, examples, context that help understanding.
    Return as: {"topic": "...", "explanation": "..."}
+
+IMPORTANT RULES:
+- Only include topics and concepts that are explicitly covered in the chapter text below.
+- Do NOT add information from external sources or other courses.
+- Do NOT include topics about the author or publication metadata.
 
 Return JSON: {"main_topics": [...], "side_topics": [...]}
 
@@ -148,15 +153,20 @@ export async function generateQuestions(
   chapterTitle: string,
   chapterText: string
 ): Promise<GeneratedQuestions> {
-  const system = `You generate study questions. Return ONLY valid JSON, no markdown fences.`;
+  const system = `You generate study questions strictly based on the provided course material. Return ONLY valid JSON, no markdown fences.`;
 
-  const prompt = `Based on this chapter, generate:
+  const prompt = `Based ONLY on the chapter content provided below, generate:
 
 1. Five questions a university professor would ask on a written exam.
    These should test deep understanding, not just memorization.
 
 2. Five questions a student could ask the professor during class
    to get more insight or clarification.
+
+IMPORTANT RULES:
+- Questions MUST be derived exclusively from the concepts, theories, and information presented in the chapter text below. Do NOT use external knowledge or content from other courses/subjects.
+- Do NOT generate questions about the author, publisher, publication date, or any other metadata about the course material itself.
+- Focus on the subject matter, key concepts, theories, and practical applications covered in the chapter.
 
 Return JSON:
 {
@@ -180,9 +190,9 @@ export async function generateMultilingualQuestions(
   chapterTitle: string,
   chapterText: string
 ): Promise<MultilingualQuestions> {
-  const system = `You generate study questions in multiple languages. Return ONLY valid JSON, no markdown fences.`;
+  const system = `You generate study questions in multiple languages strictly based on the provided course material. Return ONLY valid JSON, no markdown fences.`;
 
-  const prompt = `Based on this chapter, generate:
+  const prompt = `Based ONLY on the chapter content provided below, generate:
 
 1. Five questions a university professor would ask on a written exam.
    These should test deep understanding, not just memorization.
@@ -190,7 +200,11 @@ export async function generateMultilingualQuestions(
 2. Five questions a student could ask the professor during class
    to get more insight or clarification.
 
-IMPORTANT: Provide each question and answer in THREE languages: English (en), Dutch (nl), and French (fr).
+IMPORTANT RULES:
+- Questions MUST be derived exclusively from the concepts, theories, and information presented in the chapter text below. Do NOT use external knowledge or content from other courses/subjects.
+- Do NOT generate questions about the author, publisher, publication date, or any other metadata about the course material itself.
+- Focus on the subject matter, key concepts, theories, and practical applications covered in the chapter.
+- Provide each question and answer in THREE languages: English (en), Dutch (nl), and French (fr).
 
 Return JSON:
 {
