@@ -6,6 +6,7 @@ import {
   detectChapters,
   summarizeChapter,
   generateQuestions,
+  generateMultilingualQuestions,
   generateStudyPlan,
 } from "../services/ai-pipeline.js";
 import type { AuthEnv } from "../types.js";
@@ -199,22 +200,26 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
     return c.json({ message: "Questions already generated" });
   }
 
-  const questions = await generateQuestions(chapter.title, chapter.raw_text);
+  const questions = await generateMultilingualQuestions(chapter.title, chapter.raw_text);
 
   // Insert exam questions
   const examRows = questions.exam_questions.map((q) => ({
     chapter_id: chapterId,
     type: "exam",
-    question: q.question,
-    suggested_answer: q.suggested_answer,
+    question: q.question.en,
+    suggested_answer: q.suggested_answer.en,
+    question_translations: { nl: q.question.nl, fr: q.question.fr },
+    answer_translations: { nl: q.suggested_answer.nl, fr: q.suggested_answer.fr },
   }));
 
   // Insert discussion questions
   const discussionRows = questions.discussion_questions.map((q) => ({
     chapter_id: chapterId,
     type: "discussion",
-    question: q.question,
-    suggested_answer: q.why_useful,
+    question: q.question.en,
+    suggested_answer: q.why_useful.en,
+    question_translations: { nl: q.question.nl, fr: q.question.fr },
+    answer_translations: { nl: q.why_useful.nl, fr: q.why_useful.fr },
   }));
 
   await supabase.from("questions").insert([...examRows, ...discussionRows]);
@@ -396,21 +401,25 @@ async function processCourse(
 
     if (!chapterRow) continue;
 
-    // Generate questions
-    const questions = await generateQuestions(ch.title, ch.content);
+    // Generate multilingual questions (EN, NL, FR)
+    const questions = await generateMultilingualQuestions(ch.title, ch.content);
 
     const questionRows = [
       ...questions.exam_questions.map((q) => ({
         chapter_id: chapterRow.id,
         type: "exam" as const,
-        question: q.question,
-        suggested_answer: q.suggested_answer,
+        question: q.question.en,
+        suggested_answer: q.suggested_answer.en,
+        question_translations: { nl: q.question.nl, fr: q.question.fr },
+        answer_translations: { nl: q.suggested_answer.nl, fr: q.suggested_answer.fr },
       })),
       ...questions.discussion_questions.map((q) => ({
         chapter_id: chapterRow.id,
         type: "discussion" as const,
-        question: q.question,
-        suggested_answer: q.why_useful,
+        question: q.question.en,
+        suggested_answer: q.why_useful.en,
+        question_translations: { nl: q.question.nl, fr: q.question.fr },
+        answer_translations: { nl: q.why_useful.nl, fr: q.why_useful.fr },
       })),
     ];
 

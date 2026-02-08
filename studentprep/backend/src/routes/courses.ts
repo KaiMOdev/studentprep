@@ -55,7 +55,7 @@ courseRoutes.get("/:id", async (c) => {
   if (chapterIds.length > 0) {
     const { data } = await supabase
       .from("questions")
-      .select("id, chapter_id, type, question, suggested_answer")
+      .select("id, chapter_id, type, question, suggested_answer, question_translations, answer_translations")
       .in("chapter_id", chapterIds);
     questions = data || [];
   }

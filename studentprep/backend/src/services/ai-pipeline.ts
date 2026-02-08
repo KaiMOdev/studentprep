@@ -10,9 +10,26 @@ export interface ChapterSummary {
   side_topics: { topic: string; explanation: string }[];
 }
 
+export interface MultilingualText {
+  en: string;
+  nl: string;
+  fr: string;
+}
+
 export interface GeneratedQuestions {
   exam_questions: { question: string; suggested_answer: string }[];
   discussion_questions: { question: string; why_useful: string }[];
+}
+
+export interface MultilingualQuestions {
+  exam_questions: {
+    question: MultilingualText;
+    suggested_answer: MultilingualText;
+  }[];
+  discussion_questions: {
+    question: MultilingualText;
+    why_useful: MultilingualText;
+  }[];
 }
 
 /**
@@ -145,6 +162,50 @@ Return JSON:
 {
   "exam_questions": [{"question": "...", "suggested_answer": "..."}],
   "discussion_questions": [{"question": "...", "why_useful": "..."}]
+}
+
+Chapter: "${chapterTitle}"
+---
+${chapterText.slice(0, 30000)}
+---`;
+
+  const response = await askClaude(system, prompt);
+  return parseJsonResponse(response);
+}
+
+/**
+ * Generate exam and discussion questions for a chapter in English, Dutch, and French.
+ */
+export async function generateMultilingualQuestions(
+  chapterTitle: string,
+  chapterText: string
+): Promise<MultilingualQuestions> {
+  const system = `You generate study questions in multiple languages. Return ONLY valid JSON, no markdown fences.`;
+
+  const prompt = `Based on this chapter, generate:
+
+1. Five questions a university professor would ask on a written exam.
+   These should test deep understanding, not just memorization.
+
+2. Five questions a student could ask the professor during class
+   to get more insight or clarification.
+
+IMPORTANT: Provide each question and answer in THREE languages: English (en), Dutch (nl), and French (fr).
+
+Return JSON:
+{
+  "exam_questions": [
+    {
+      "question": {"en": "English question", "nl": "Dutch question", "fr": "French question"},
+      "suggested_answer": {"en": "English answer", "nl": "Dutch answer", "fr": "French answer"}
+    }
+  ],
+  "discussion_questions": [
+    {
+      "question": {"en": "English question", "nl": "Dutch question", "fr": "French question"},
+      "why_useful": {"en": "English explanation", "nl": "Dutch explanation", "fr": "French explanation"}
+    }
+  ]
 }
 
 Chapter: "${chapterTitle}"
