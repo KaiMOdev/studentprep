@@ -19,6 +19,19 @@ quizRoutes.post("/generate", async (c) => {
     return c.json({ error: "chapterIds and courseId are required" }, 400);
   }
 
+  const { data: courseChapters, error: courseChaptersError } = await supabase
+    .from("chapters")
+    .select("id")
+    .eq("course_id", courseId);
+
+  if (courseChaptersError) {
+    return c.json({ error: courseChaptersError.message }, 500);
+  }
+
+  const courseChapterIds = new Set(
+    (courseChapters || []).map((chapter: { id: string }) => chapter.id)
+  );
+
   // Get questions for selected chapters (new material)
   const { data: newQuestions } = await supabase
     .from("questions")
@@ -39,7 +52,11 @@ quizRoutes.post("/generate", async (c) => {
   const pastChapterIds = new Set<string>();
   for (const result of pastResults || []) {
     for (const q of result.questions as any[]) {
-      if (q.from_chapter && !chapterIds.includes(q.from_chapter)) {
+      if (
+        q.from_chapter &&
+        courseChapterIds.has(q.from_chapter) &&
+        !chapterIds.includes(q.from_chapter)
+      ) {
         pastChapterIds.add(q.from_chapter);
       }
     }
