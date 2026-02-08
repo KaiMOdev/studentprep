@@ -1,13 +1,23 @@
 import { askClaude } from "./claude.js";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export interface ChapterData {
   title: string;
   content: string;
 }
 
 export interface ChapterSummary {
-  main_topics: { topic: string; explanation: string; key_terms: string[] }[];
+  source_language: string;
+  main_topics: {
+    topic: string;
+    explanation: string;
+    key_terms: { term: string; definition: string }[];
+    importance: "critical" | "important" | "supporting";
+  }[];
   side_topics: { topic: string; explanation: string }[];
+  prerequisites: string[];
+  connections: string[];
 }
 
 export interface MultilingualText {
@@ -16,15 +26,35 @@ export interface MultilingualText {
   fr: string;
 }
 
+export type BloomLevel =
+  | "remember"
+  | "understand"
+  | "apply"
+  | "analyze"
+  | "evaluate"
+  | "create";
+
 export interface GeneratedQuestions {
-  exam_questions: { question: string; suggested_answer: string }[];
-  discussion_questions: { question: string; why_useful: string }[];
+  exam_questions: {
+    question: string;
+    suggested_answer: string;
+    bloom_level: BloomLevel;
+    difficulty: 1 | 2 | 3;
+    related_topic: string;
+  }[];
+  discussion_questions: {
+    question: string;
+    why_useful: string;
+    related_topic: string;
+  }[];
 }
 
 export interface MultilingualQuestions {
   exam_questions: {
     question: MultilingualText;
     suggested_answer: MultilingualText;
+    bloom_level: BloomLevel;
+    difficulty: 1 | 2 | 3;
   }[];
   discussion_questions: {
     question: MultilingualText;
@@ -32,14 +62,82 @@ export interface MultilingualQuestions {
   }[];
 }
 
+export interface StudyPlanDay {
+  date: string;
+  chapters: { id: string; title: string }[];
+  total_minutes: number;
+  type: "study" | "review" | "buffer" | "practice";
+  focus: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 /**
  * Strip markdown code fences from Claude's response and parse JSON.
+ * Now also handles partial fences and trailing commas.
  */
 function parseJsonResponse<T>(text: string): T {
-  // Remove ```json ... ``` or ``` ... ``` wrappers
-  const stripped = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
-  return JSON.parse(stripped);
+  let cleaned = text
+    .replace(/^```(?:json)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/, "")
+    .trim();
+
+  // Fix trailing commas before } or ] (common Claude mistake)
+  cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // Attempt to extract JSON from surrounding text
+    const jsonMatch = cleaned.match(/[\[{][\s\S]*[\]}]/);
+    if (jsonMatch) {
+      const extracted = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
+      return JSON.parse(extracted);
+    }
+    throw new Error(`Failed to parse Claude response as JSON: ${(e as Error).message}\nRaw: ${text.slice(0, 500)}`);
+  }
 }
+
+/**
+ * Fuzzy find: locate start_text in fullText, tolerating minor whitespace differences.
+ */
+function fuzzyIndexOf(fullText: string, marker: string, fromIndex = 0): number {
+  // Try exact match first
+  const exact = fullText.indexOf(marker, fromIndex);
+  if (exact !== -1) return exact;
+
+  // Normalize whitespace and try again
+  const normalizeWs = (s: string) => s.replace(/\s+/g, " ").trim();
+  const normalizedFull = normalizeWs(fullText);
+  const normalizedMarker = normalizeWs(marker);
+
+  const normalizedIdx = normalizedFull.indexOf(normalizedMarker, fromIndex > 0 ? Math.max(0, fromIndex - 50) : 0);
+  if (normalizedIdx === -1) return -1;
+
+  // Map back to original index (approximate)
+  // Find the closest match in the original text near the normalized position
+  const searchWindow = 200;
+  const approxStart = Math.max(0, normalizedIdx - searchWindow);
+  const approxEnd = Math.min(fullText.length, normalizedIdx + marker.length + searchWindow);
+  const window = fullText.slice(approxStart, approxEnd);
+
+  // Try progressively shorter substrings of the marker
+  for (let len = marker.length; len >= 20; len -= 5) {
+    const sub = normalizeWs(marker.slice(0, len));
+    const subWords = sub.split(" ");
+    // Build a regex that allows flexible whitespace
+    const pattern = subWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+    const re = new RegExp(pattern);
+    const match = window.match(re);
+    if (match && match.index !== undefined) {
+      return approxStart + match.index;
+    }
+  }
+
+  return -1;
+}
+
+// ─── Chapter Detection ───────────────────────────────────────────────────────
 
 interface ChapterBoundary {
   title: string;
@@ -48,64 +146,71 @@ interface ChapterBoundary {
 
 /**
  * Split raw PDF text into chapters using Claude.
- * Step 1: Ask Claude for chapter titles + first ~60 chars of each chapter.
- * Step 2: Use those markers to split the full text locally.
+ * Improved: better prompt, fuzzy matching, validation.
  */
 export async function detectChapters(fullText: string): Promise<ChapterData[]> {
-  const system = `You identify chapter boundaries in course text. Return ONLY valid JSON, no markdown fences.`;
+  const textPreview = fullText.slice(0, 80000);
 
-  const prompt = `Analyze this course text and identify where each chapter starts.
+  const system = `You are a document structure analyzer. Your job is to identify chapter or section boundaries in academic/course text. You return ONLY raw JSON — no markdown fences, no explanation.`;
 
-Return a JSON array: [{"title": "Chapter title", "start_text": "first 50-60 characters of that chapter exactly as they appear"}]
+  const prompt = `I have extracted text from a PDF course document. Identify where each chapter or major section starts.
 
-Rules:
-- "start_text" must be an EXACT substring from the text (I will use it to find the position)
-- Include enough characters to be unique (50-60 chars)
-- Maximum 20 chapters
-- If there are no clear chapters, split by major topic shifts
-- If the text is very short, return a single chapter
+INSTRUCTIONS:
+1. Look for structural markers: numbered chapters, bold headings, "Chapter X", Roman numerals, or clear topic transitions.
+2. For each chapter, give me its title and a verbatim snippet from the VERY BEGINNING of that chapter (the first 60-80 characters, copied exactly — I will use string matching to find the position).
+3. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation.
+4. If the document has no clear chapters, identify 3-8 major topic shifts.
+5. Maximum 20 entries.
 
-Text:
+OUTPUT FORMAT (raw JSON array, no fences):
+[{"title": "Descriptive chapter title", "start_text": "exact first 60-80 chars from the text"}]
+
+EXAMPLES of good start_text values:
+- "Chapter 3: Database Normalization\\nNormalization is the proc"
+- "3.1 Introduction to Machine Learning\\n\\nMachine learning is"
+- "PART II: ADVANCED TOPICS\\n\\nIn this section we explore"
+
+TEXT:
 ---
-${fullText.slice(0, 80000)}
+${textPreview}
 ---`;
 
   const response = await askClaude(system, prompt);
   const boundaries: ChapterBoundary[] = parseJsonResponse(response);
 
-  // Split the full text using the boundary markers
-  const chapters: ChapterData[] = [];
-
-  for (let i = 0; i < boundaries.length; i++) {
-    const boundary = boundaries[i];
-    const startIdx = fullText.indexOf(boundary.start_text);
-
-    let content: string;
-    if (startIdx === -1) {
-      // Marker not found — skip or use remaining text for last entry
-      if (i === 0) {
-        // First chapter not found, use full text as single chapter
-        return [{ title: boundary.title, content: fullText }];
-      }
-      continue;
-    }
-
-    if (i < boundaries.length - 1) {
-      // Find where the next chapter starts
-      const nextBoundary = boundaries[i + 1];
-      const nextIdx = fullText.indexOf(nextBoundary.start_text, startIdx + 1);
-      content = nextIdx !== -1
-        ? fullText.slice(startIdx, nextIdx)
-        : fullText.slice(startIdx);
-    } else {
-      // Last chapter — take everything until the end
-      content = fullText.slice(startIdx);
-    }
-
-    chapters.push({ title: boundary.title, content: content.trim() });
+  if (!boundaries || boundaries.length === 0) {
+    return [{ title: "Full Course", content: fullText }];
   }
 
-  // Fallback: if no chapters were created, use full text as one chapter
+  // Split using fuzzy matching
+  const chapters: ChapterData[] = [];
+  const foundPositions: { idx: number; boundary: ChapterBoundary }[] = [];
+
+  for (const boundary of boundaries) {
+    const idx = fuzzyIndexOf(fullText, boundary.start_text);
+    if (idx !== -1) {
+      foundPositions.push({ idx, boundary });
+    }
+  }
+
+  // Sort by position in text
+  foundPositions.sort((a, b) => a.idx - b.idx);
+
+  // Remove duplicates (positions too close together)
+  const deduplicated = foundPositions.filter(
+    (pos, i) => i === 0 || pos.idx - foundPositions[i - 1].idx > 100
+  );
+
+  for (let i = 0; i < deduplicated.length; i++) {
+    const start = deduplicated[i].idx;
+    const end = i < deduplicated.length - 1 ? deduplicated[i + 1].idx : fullText.length;
+    const content = fullText.slice(start, end).trim();
+
+    if (content.length > 50) {
+      chapters.push({ title: deduplicated[i].boundary.title, content });
+    }
+  }
+
   if (chapters.length === 0) {
     return [{ title: "Full Course", content: fullText }];
   }
@@ -113,29 +218,52 @@ ${fullText.slice(0, 80000)}
   return chapters;
 }
 
+// ─── Chapter Summary ─────────────────────────────────────────────────────────
+
 /**
- * Summarize a single chapter: extract main topics and side topics.
+ * Summarize a chapter: extract main topics, side topics, key terms with definitions,
+ * prerequisite knowledge, and connections to other topics.
  */
 export async function summarizeChapter(
   chapterTitle: string,
   chapterText: string
 ): Promise<ChapterSummary> {
-  const system = `You are a study assistant that creates structured summaries strictly based on the provided course material. Return ONLY valid JSON, no markdown fences. Keep language consistent with the source material.`;
+  const system = `You are an expert academic tutor creating study materials. You produce structured summaries that help students prepare for university exams. Respond in the SAME LANGUAGE as the source material. Return ONLY raw JSON — no markdown fences, no commentary.`;
 
-  const prompt = `Analyze this chapter and provide a structured summary based ONLY on the content provided below.
+  const prompt = `Analyze this chapter and create a comprehensive study summary.
 
-1. MAIN TOPICS: The core concepts a student MUST know for an exam.
-   Return as: {"topic": "...", "explanation": "...", "key_terms": ["..."]}
+INSTRUCTIONS:
+- Respond in the SAME LANGUAGE as the chapter text below.
+- Base your summary EXCLUSIVELY on the content provided — no external knowledge.
+- Ignore metadata (author, publisher, ISBN, etc.).
 
-2. SIDE TOPICS: Supporting details, examples, context that help understanding.
-   Return as: {"topic": "...", "explanation": "..."}
+PRODUCE THIS STRUCTURE:
+{
+  "source_language": "detected language code (en/nl/fr/de/...)",
+  "main_topics": [
+    {
+      "topic": "Topic name",
+      "explanation": "Clear 2-4 sentence explanation a student can study from. Include the WHY, not just the WHAT.",
+      "key_terms": [
+        {"term": "Technical term", "definition": "Concise definition as used in this course"}
+      ],
+      "importance": "critical | important | supporting"
+    }
+  ],
+  "side_topics": [
+    {"topic": "Supporting topic", "explanation": "Brief explanation of why it matters in context"}
+  ],
+  "prerequisites": ["concepts a student should already know before reading this chapter"],
+  "connections": ["how this chapter relates to broader themes or other possible chapters"]
+}
 
-IMPORTANT RULES:
-- Only include topics and concepts that are explicitly covered in the chapter text below.
-- Do NOT add information from external sources or other courses.
-- Do NOT include topics about the author or publication metadata.
-
-Return JSON: {"main_topics": [...], "side_topics": [...]}
+GUIDELINES:
+- Mark topics "critical" if a student would fail the exam without knowing them.
+- Mark topics "important" if they're likely exam material but not make-or-break.
+- Mark topics "supporting" if they provide context or depth.
+- Key terms should include definitions AS USED IN THIS COURSE (not generic dictionary definitions).
+- Prerequisites help students identify gaps before studying this chapter.
+- Connections help students see the bigger picture.
 
 Chapter: "${chapterTitle}"
 ---
@@ -146,81 +274,70 @@ ${chapterText.slice(0, 30000)}
   return parseJsonResponse(response);
 }
 
+// ─── Question Generation ─────────────────────────────────────────────────────
+
 /**
- * Generate exam and discussion questions for a chapter.
+ * Generate graded exam questions using Bloom's taxonomy + discussion questions.
+ * Optionally accepts the chapter summary for better question targeting.
  */
 export async function generateQuestions(
   chapterTitle: string,
-  chapterText: string
+  chapterText: string,
+  summary?: ChapterSummary
 ): Promise<GeneratedQuestions> {
-  const system = `You generate study questions strictly based on the provided course material. Return ONLY valid JSON, no markdown fences.`;
+  const summaryContext = summary
+    ? `\nKEY TOPICS IDENTIFIED:\n${summary.main_topics.map((t) => `- [${t.importance}] ${t.topic}`).join("\n")}\n`
+    : "";
 
-  const prompt = `Based ONLY on the chapter content provided below, generate:
+  const system = `You are a university professor designing exam questions. You create questions at varying cognitive levels (Bloom's taxonomy). Questions must be answerable ONLY from the provided material. Return ONLY raw JSON — no markdown fences.`;
 
-1. Five questions a university professor would ask on a written exam.
-   These should test deep understanding, not just memorization.
+  const prompt = `Create study questions for this chapter.
+${summaryContext}
+EXAM QUESTIONS (generate 8):
+Distribute across Bloom's taxonomy levels:
+- 2x "remember/understand" (difficulty: 1) — definitions, recall, basic comprehension
+- 3x "apply/analyze" (difficulty: 2) — apply concepts to scenarios, compare/contrast, find patterns
+- 3x "evaluate/create" (difficulty: 3) — critique, justify, design, synthesize arguments
 
-2. Five questions a student could ask the professor during class
-   to get more insight or clarification.
+For each question, provide:
+- The question itself (clear, specific, exam-worthy)
+- A model answer (what would earn full marks — 3-6 sentences)
+- The Bloom level: remember | understand | apply | analyze | evaluate | create
+- Difficulty: 1, 2, or 3
+- Which topic from the chapter it tests
 
-IMPORTANT RULES:
-- Questions MUST be derived exclusively from the concepts, theories, and information presented in the chapter text below. Do NOT use external knowledge or content from other courses/subjects.
-- Do NOT generate questions about the author, publisher, publication date, or any other metadata about the course material itself.
-- Focus on the subject matter, key concepts, theories, and practical applications covered in the chapter.
-
-Return JSON:
-{
-  "exam_questions": [{"question": "...", "suggested_answer": "..."}],
-  "discussion_questions": [{"question": "...", "why_useful": "..."}]
-}
-
-Chapter: "${chapterTitle}"
----
-${chapterText.slice(0, 30000)}
----`;
-
-  const response = await askClaude(system, prompt);
-  return parseJsonResponse(response);
-}
-
-/**
- * Generate exam and discussion questions for a chapter in English, Dutch, and French.
- */
-export async function generateMultilingualQuestions(
-  chapterTitle: string,
-  chapterText: string
-): Promise<MultilingualQuestions> {
-  const system = `You generate study questions in multiple languages strictly based on the provided course material. Return ONLY valid JSON, no markdown fences.`;
-
-  const prompt = `Based ONLY on the chapter content provided below, generate:
-
-1. Five questions a university professor would ask on a written exam.
-   These should test deep understanding, not just memorization.
-
-2. Five questions a student could ask the professor during class
-   to get more insight or clarification.
-
-IMPORTANT RULES:
-- Questions MUST be derived exclusively from the concepts, theories, and information presented in the chapter text below. Do NOT use external knowledge or content from other courses/subjects.
-- Do NOT generate questions about the author, publisher, publication date, or any other metadata about the course material itself.
-- Focus on the subject matter, key concepts, theories, and practical applications covered in the chapter.
-- Provide each question and answer in THREE languages: English (en), Dutch (nl), and French (fr).
+DISCUSSION QUESTIONS (generate 5):
+Questions a curious student would ask in class to deepen understanding. These should:
+- Challenge assumptions in the material
+- Ask about real-world applications
+- Explore edge cases or limitations
+- Connect to other fields
 
 Return JSON:
 {
   "exam_questions": [
     {
-      "question": {"en": "English question", "nl": "Dutch question", "fr": "French question"},
-      "suggested_answer": {"en": "English answer", "nl": "Dutch answer", "fr": "French answer"}
+      "question": "...",
+      "suggested_answer": "...",
+      "bloom_level": "analyze",
+      "difficulty": 2,
+      "related_topic": "topic name from the chapter"
     }
   ],
   "discussion_questions": [
     {
-      "question": {"en": "English question", "nl": "Dutch question", "fr": "French question"},
-      "why_useful": {"en": "English explanation", "nl": "Dutch explanation", "fr": "French explanation"}
+      "question": "...",
+      "why_useful": "what insight this question helps develop",
+      "related_topic": "topic name"
     }
   ]
 }
+
+RULES:
+- Questions MUST be answerable from the chapter content below only.
+- Do NOT ask about metadata (author, publication, etc.).
+- Vary question formats: explain, compare, apply-to-scenario, evaluate, design.
+- Model answers should demonstrate deep understanding, not just keyword matching.
 
 Chapter: "${chapterTitle}"
 ---
@@ -231,42 +348,114 @@ ${chapterText.slice(0, 30000)}
   return parseJsonResponse(response);
 }
 
-export interface StudyPlanDay {
-  date: string;
-  chapters: { id: string; title: string }[];
-  total_minutes: number;
-  type: "study" | "review" | "buffer";
-}
+// ─── Multilingual Questions ──────────────────────────────────────────────────
 
 /**
- * Generate a study plan for a course.
+ * Generate questions in one language, then translate.
+ * More token-efficient and higher quality than generating in 3 languages at once.
+ */
+export async function generateMultilingualQuestions(
+  chapterTitle: string,
+  chapterText: string,
+  summary?: ChapterSummary
+): Promise<MultilingualQuestions> {
+  // Step 1: Generate high-quality questions in the source language
+  const baseQuestions = await generateQuestions(chapterTitle, chapterText, summary);
+
+  // Step 2: Translate to all three languages
+  const system = `You are a professional academic translator. Translate study questions and answers accurately into English, Dutch, and French. Preserve academic terminology and nuance. Return ONLY raw JSON — no markdown fences.`;
+
+  const prompt = `Translate these exam and discussion questions into English (en), Dutch (nl), and French (fr).
+
+RULES:
+- Preserve academic and technical terminology accurately in each language.
+- Adapt idioms and phrasing to sound natural in each language.
+- Keep the same meaning and level of detail in all translations.
+- If the original is already in one of the target languages, still include it.
+
+QUESTIONS TO TRANSLATE:
+${JSON.stringify(baseQuestions, null, 2)}
+
+Return JSON:
+{
+  "exam_questions": [
+    {
+      "question": {"en": "...", "nl": "...", "fr": "..."},
+      "suggested_answer": {"en": "...", "nl": "...", "fr": "..."},
+      "bloom_level": "...",
+      "difficulty": 1
+    }
+  ],
+  "discussion_questions": [
+    {
+      "question": {"en": "...", "nl": "...", "fr": "..."},
+      "why_useful": {"en": "...", "nl": "...", "fr": "..."}
+    }
+  ]
+}`;
+
+  const response = await askClaude(system, prompt);
+  return parseJsonResponse(response);
+}
+
+// ─── Study Plan ──────────────────────────────────────────────────────────────
+
+/**
+ * Generate a study plan with spaced repetition and active recall sessions.
  */
 export async function generateStudyPlan(
-  chapters: { id: string; title: string }[],
+  chapters: { id: string; title: string; importance?: string }[],
   examDate: string,
   hoursPerDay: number
 ): Promise<StudyPlanDay[]> {
-  const system = `You create realistic study schedules. Return ONLY valid JSON, no markdown fences. Use ISO date format (YYYY-MM-DD).`;
-
   const today = new Date().toISOString().split("T")[0];
+  const examD = new Date(examDate);
+  const todayD = new Date(today);
+  const daysAvailable = Math.floor((examD.getTime() - todayD.getTime()) / (1000 * 60 * 60 * 24));
 
-  const prompt = `Create a study plan for a student with these parameters:
+  const system = `You are a study coach who creates evidence-based study schedules using spaced repetition and active recall principles. Return ONLY raw JSON — no markdown fences. Use ISO date format (YYYY-MM-DD).`;
 
+  const prompt = `Create a study plan for a university student.
+
+PARAMETERS:
 - Today: ${today}
 - Exam date: ${examDate}
-- Available study hours per day: ${hoursPerDay}
-- Chapters to cover:
-${chapters.map((ch, i) => `  ${i + 1}. "${ch.title}" (id: "${ch.id}")`).join("\n")}
+- Days available: ${daysAvailable}
+- Study hours per day: ${hoursPerDay}
+- Chapters:
+${chapters.map((ch, i) => `  ${i + 1}. "${ch.title}" (id: "${ch.id}")${ch.importance ? ` [${ch.importance}]` : ""}`).join("\n")}
 
-Rules:
-- Spread chapters evenly across available days
-- Include 1-2 review days before the exam
-- Add a buffer day if there's enough time
-- Each day should have a realistic workload
-- Don't schedule study on the exam day itself
+STUDY SCIENCE PRINCIPLES TO APPLY:
+1. SPACED REPETITION: Review material at increasing intervals (1 day, 3 days, 7 days).
+2. INTERLEAVING: Mix chapters on review days rather than blocking.
+3. ACTIVE RECALL: Include "practice" days where the student tests themselves.
+4. PROGRESSIVE LOAD: Start with the most critical/foundational chapters.
+5. BUFFER: Leave a buffer day before the exam for rest and light review.
+
+DAY TYPES:
+- "study": First encounter with new material (read, summarize, take notes)
+- "review": Revisit previously studied chapters (re-read summaries, key terms)
+- "practice": Self-test with questions, practice problems
+- "buffer": Light review or rest day
+
+${daysAvailable < chapters.length * 2
+    ? "WARNING: Limited time available. Prioritize critical chapters and combine where possible."
+    : ""}
 
 Return a JSON array:
-[{"date": "YYYY-MM-DD", "chapters": [{"id": "...", "title": "..."}], "total_minutes": 120, "type": "study|review|buffer"}]`;
+[{
+  "date": "YYYY-MM-DD",
+  "chapters": [{"id": "...", "title": "..."}],
+  "total_minutes": 120,
+  "type": "study | review | practice | buffer",
+  "focus": "brief description of what to do this day"
+}]
+
+RULES:
+- Don't schedule on the exam day itself.
+- Be realistic: max ${hoursPerDay * 60} minutes per day.
+- Every chapter should be studied at least once and reviewed at least once.
+- The last 1-2 days should be review/practice, not new material.`;
 
   const response = await askClaude(system, prompt);
   return parseJsonResponse(response);
