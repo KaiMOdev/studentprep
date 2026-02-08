@@ -92,10 +92,57 @@ function parseJsonResponse<T>(text: string): T {
     const jsonMatch = cleaned.match(/[\[{][\s\S]*[\]}]/);
     if (jsonMatch) {
       const extracted = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
-      return JSON.parse(extracted);
+      try {
+        return JSON.parse(extracted);
+      } catch {
+        // fall through to truncation repair
+      }
     }
+
+    // Attempt to repair truncated JSON by closing open brackets/braces
+    const repaired = repairTruncatedJson(cleaned);
+    if (repaired) {
+      try {
+        return JSON.parse(repaired);
+      } catch {
+        // give up
+      }
+    }
+
     throw new Error(`Failed to parse Claude response as JSON: ${(e as Error).message}\nRaw: ${text.slice(0, 500)}`);
   }
+}
+
+/**
+ * Try to fix JSON that was truncated mid-stream by removing the last
+ * incomplete value and closing all open brackets / braces.
+ */
+function repairTruncatedJson(text: string): string | null {
+  // Strip any trailing incomplete string or value
+  let trimmed = text.replace(/,\s*$/, "").replace(/,\s*"[^"]*$/, "");
+
+  // Remove a trailing incomplete key-value pair (e.g. `"key": "unterminated...`)
+  trimmed = trimmed.replace(/,?\s*"[^"]*":\s*"[^"]*$/, "");
+  trimmed = trimmed.replace(/,?\s*"[^"]*":\s*$/, "");
+
+  // Count unclosed brackets
+  const opens: string[] = [];
+  let inString = false;
+  let escape = false;
+  for (const ch of trimmed) {
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{" || ch === "[") opens.push(ch);
+    if (ch === "}" || ch === "]") opens.pop();
+  }
+
+  if (opens.length === 0) return null;
+
+  // Close in reverse order
+  const closers = opens.reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+  return trimmed + closers;
 }
 
 /**
@@ -397,7 +444,7 @@ Return JSON:
   ]
 }`;
 
-  const response = await askClaude(system, prompt, 8192, model);
+  const response = await askClaude(system, prompt, 16384, model);
   return parseJsonResponse(response);
 }
 
