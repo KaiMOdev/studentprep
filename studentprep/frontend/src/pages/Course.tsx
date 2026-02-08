@@ -2,10 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 
+interface KeyTerm {
+  term: string;
+  definition: string;
+}
+
 interface MainTopic {
   topic: string;
   explanation: string;
-  key_terms: string[];
+  key_terms: (KeyTerm | string)[];
 }
 
 interface SideTopic {
@@ -520,14 +525,19 @@ export default function Course() {
                                   {topic.key_terms &&
                                     topic.key_terms.length > 0 && (
                                       <div className="mt-2 flex flex-wrap gap-1">
-                                        {topic.key_terms.map((term, j) => (
-                                          <span
-                                            key={j}
-                                            className="rounded bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800"
-                                          >
-                                            {term}
-                                          </span>
-                                        ))}
+                                        {topic.key_terms.map((term, j) => {
+                                          const label = typeof term === "string" ? term : term.term;
+                                          const tooltip = typeof term === "string" ? undefined : term.definition;
+                                          return (
+                                            <span
+                                              key={j}
+                                              title={tooltip}
+                                              className="rounded bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                                            >
+                                              {label}
+                                            </span>
+                                          );
+                                        })}
                                       </div>
                                     )}
                                 </div>
