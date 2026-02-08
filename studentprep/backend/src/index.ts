@@ -8,6 +8,7 @@ import { quizRoutes } from "./routes/quiz.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { pdfRoutes } from "./routes/pdf.js";
 import { validateConfig, logConfigStatus } from "./services/config.js";
+import { isAnthropicConfigured } from "./services/claude.js";
 
 // Validate configuration at startup
 const configStatus = validateConfig();
@@ -54,6 +55,21 @@ app.use("/api/*", async (c, next) => {
           ["SUPABASE_URL", "SUPABASE_SERVICE_KEY"].includes(v)
         ),
         hint: "Copy studentprep/backend/.env.example to studentprep/backend/.env and fill in your Supabase project values.",
+      },
+      503
+    );
+  }
+  await next();
+});
+
+// Guard: return 503 on AI routes when Anthropic API key is not configured
+app.use("/api/ai/*", async (c, next) => {
+  if (!isAnthropicConfigured()) {
+    return c.json(
+      {
+        error:
+          "AI features are unavailable — ANTHROPIC_API_KEY is not configured.",
+        hint: "Set ANTHROPIC_API_KEY in studentprep/backend/.env and restart the server.",
       },
       503
     );
