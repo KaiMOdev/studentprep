@@ -6,7 +6,7 @@ import {
   detectChapters,
   summarizeChapter,
   generateQuestions,
-  generateMultilingualQuestions,
+  translateText,
   generateStudyPlan,
 } from "../services/ai-pipeline.js";
 import { AI_MODELS, DEFAULT_MODEL, type AIModel } from "../services/claude.js";
@@ -223,31 +223,88 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
     return c.json({ message: "Questions already generated" });
   }
 
-  const questions = await generateMultilingualQuestions(chapter.title, chapter.raw_text);
+  const questions = await generateQuestions(chapter.title, chapter.raw_text);
 
   // Insert exam questions
   const examRows = questions.exam_questions.map((q) => ({
     chapter_id: chapterId,
     type: "exam",
-    question: q.question.en,
-    suggested_answer: q.suggested_answer.en,
-    question_translations: { nl: q.question.nl, fr: q.question.fr },
-    answer_translations: { nl: q.suggested_answer.nl, fr: q.suggested_answer.fr },
+    question: q.question,
+    suggested_answer: q.suggested_answer,
+    question_translations: {},
+    answer_translations: {},
   }));
 
   // Insert discussion questions
   const discussionRows = questions.discussion_questions.map((q) => ({
     chapter_id: chapterId,
     type: "discussion",
-    question: q.question.en,
-    suggested_answer: q.why_useful.en,
-    question_translations: { nl: q.question.nl, fr: q.question.fr },
-    answer_translations: { nl: q.why_useful.nl, fr: q.why_useful.fr },
+    question: q.question,
+    suggested_answer: q.why_useful,
+    question_translations: {},
+    answer_translations: {},
   }));
 
   await supabase.from("questions").insert([...examRows, ...discussionRows]);
 
   return c.json({ questions });
+});
+
+// Translate a question or answer on demand (uses Sonnet 4.5 for speed)
+aiRoutes.post("/translate", async (c) => {
+  const userId = c.get("userId");
+  const supabase = getSupabaseAdmin();
+
+  const body = await c.req.json();
+  const { questionId, field, targetLang } = body as {
+    questionId: string;
+    field: "question" | "answer";
+    targetLang: "nl" | "fr";
+  };
+
+  if (!questionId || !field || !targetLang) {
+    return c.json({ error: "questionId, field, and targetLang are required" }, 400);
+  }
+
+  if (!["nl", "fr"].includes(targetLang)) {
+    return c.json({ error: "targetLang must be 'nl' or 'fr'" }, 400);
+  }
+
+  if (!["question", "answer"].includes(field)) {
+    return c.json({ error: "field must be 'question' or 'answer'" }, 400);
+  }
+
+  // Fetch the question and verify ownership
+  const { data: question } = await supabase
+    .from("questions")
+    .select("*, chapters!inner(courses!inner(user_id))")
+    .eq("id", questionId)
+    .single();
+
+  if (!question || question.chapters.courses.user_id !== userId) {
+    return c.json({ error: "Question not found" }, 404);
+  }
+
+  // Check if translation already exists in DB
+  const translationsCol = field === "question" ? "question_translations" : "answer_translations";
+  const existingTranslations = (question[translationsCol] || {}) as Record<string, string>;
+
+  if (existingTranslations[targetLang]) {
+    return c.json({ translation: existingTranslations[targetLang] });
+  }
+
+  // Translate the source text
+  const sourceText = field === "question" ? question.question : question.suggested_answer;
+  const translation = await translateText(sourceText, targetLang);
+
+  // Save translation to DB for future requests
+  const updatedTranslations = { ...existingTranslations, [targetLang]: translation };
+  await supabase
+    .from("questions")
+    .update({ [translationsCol]: updatedTranslations })
+    .eq("id", questionId);
+
+  return c.json({ translation });
 });
 
 // Get existing study plans for a course
@@ -425,25 +482,25 @@ async function processCourse(
 
     if (!chapterRow) continue;
 
-    // Generate multilingual questions (EN, NL, FR)
-    const questions = await generateMultilingualQuestions(ch.title, ch.content, undefined, model);
+    // Generate questions in source language
+    const questions = await generateQuestions(ch.title, ch.content, summary, model);
 
     const questionRows = [
       ...questions.exam_questions.map((q) => ({
         chapter_id: chapterRow.id,
         type: "exam" as const,
-        question: q.question.en,
-        suggested_answer: q.suggested_answer.en,
-        question_translations: { nl: q.question.nl, fr: q.question.fr },
-        answer_translations: { nl: q.suggested_answer.nl, fr: q.suggested_answer.fr },
+        question: q.question,
+        suggested_answer: q.suggested_answer,
+        question_translations: {},
+        answer_translations: {},
       })),
       ...questions.discussion_questions.map((q) => ({
         chapter_id: chapterRow.id,
         type: "discussion" as const,
-        question: q.question.en,
-        suggested_answer: q.why_useful.en,
-        question_translations: { nl: q.question.nl, fr: q.question.fr },
-        answer_translations: { nl: q.why_useful.nl, fr: q.why_useful.fr },
+        question: q.question,
+        suggested_answer: q.why_useful,
+        question_translations: {},
+        answer_translations: {},
       })),
     ];
 
