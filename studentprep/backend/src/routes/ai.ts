@@ -9,6 +9,7 @@ import {
   generateMultilingualQuestions,
   generateStudyPlan,
 } from "../services/ai-pipeline.js";
+import { AI_MODELS, DEFAULT_MODEL, type AIModel } from "../services/claude.js";
 import type { AuthEnv } from "../types.js";
 
 export const aiRoutes = new Hono<AuthEnv>();
@@ -26,6 +27,11 @@ interface ProcessingProgress {
 const processingProgress = new Map<string, ProcessingProgress>();
 
 aiRoutes.use("*", requireAuth);
+
+// List available AI models
+aiRoutes.get("/models", (c) => {
+  return c.json({ models: AI_MODELS, default: DEFAULT_MODEL });
+});
 
 // Get processing progress for a course
 aiRoutes.get("/progress/:courseId", async (c) => {
@@ -52,6 +58,14 @@ aiRoutes.get("/progress/:courseId", async (c) => {
 
   return c.json(progress);
 });
+
+// Validate and return a safe model id
+function parseModel(raw: unknown): AIModel {
+  if (typeof raw === "string" && AI_MODELS.some((m) => m.id === raw)) {
+    return raw as AIModel;
+  }
+  return DEFAULT_MODEL;
+}
 
 // Process a course: extract text → detect chapters → summarize → generate questions
 aiRoutes.post("/summarize/:courseId", async (c) => {
@@ -95,8 +109,17 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
   // Clear any stale cancellation flag
   cancelledCourses.delete(courseId);
 
+  // Parse model from request body (JSON or empty)
+  let model: AIModel = DEFAULT_MODEL;
+  try {
+    const body = await c.req.json();
+    model = parseModel(body.model);
+  } catch {
+    // No body or invalid JSON — use default model
+  }
+
   // Run pipeline in background (don't block the response)
-  processCourse(courseId, course.storage_path).catch(async (err) => {
+  processCourse(courseId, course.storage_path, model).catch(async (err) => {
     processingProgress.delete(courseId);
 
     // Don't set error status if it was a cancellation
@@ -123,7 +146,7 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
       .eq("id", courseId);
   });
 
-  return c.json({ message: "Processing started", courseId });
+  return c.json({ message: "Processing started", courseId, model });
 });
 
 // Cancel processing
@@ -322,7 +345,8 @@ aiRoutes.post("/study-plan", async (c) => {
 
 async function processCourse(
   courseId: string,
-  storagePath: string
+  storagePath: string,
+  model: AIModel = DEFAULT_MODEL
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
 
@@ -361,7 +385,7 @@ async function processCourse(
     chapterTitle: "",
   });
 
-  const chapters = await detectChapters(fullText);
+  const chapters = await detectChapters(fullText, model);
 
   // 4. For each chapter: summarize + generate questions
   for (let i = 0; i < chapters.length; i++) {
@@ -383,7 +407,7 @@ async function processCourse(
     });
 
     // Summarize
-    const summary = await summarizeChapter(ch.title, ch.content);
+    const summary = await summarizeChapter(ch.title, ch.content, model);
 
     // Insert chapter
     const { data: chapterRow } = await supabase
@@ -402,7 +426,7 @@ async function processCourse(
     if (!chapterRow) continue;
 
     // Generate multilingual questions (EN, NL, FR)
-    const questions = await generateMultilingualQuestions(ch.title, ch.content);
+    const questions = await generateMultilingualQuestions(ch.title, ch.content, undefined, model);
 
     const questionRows = [
       ...questions.exam_questions.map((q) => ({

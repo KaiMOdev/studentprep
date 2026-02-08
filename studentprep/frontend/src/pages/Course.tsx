@@ -94,6 +94,16 @@ interface ProcessingProgress {
   chapterTitle: string;
 }
 
+interface AIModelOption {
+  id: string;
+  label: string;
+}
+
+const FALLBACK_MODELS: AIModelOption[] = [
+  { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
+  { id: "claude-opus-4-6", label: "Opus 4.6" },
+];
+
 export default function Course() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -105,6 +115,8 @@ export default function Course() {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<ProcessingProgress | null>(null);
+  const [models, setModels] = useState<AIModelOption[]>(FALLBACK_MODELS);
+  const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-4-5-20250929");
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -125,6 +137,18 @@ export default function Course() {
   useEffect(() => {
     loadCourse();
   }, [loadCourse]);
+
+  // Fetch available AI models
+  useEffect(() => {
+    apiFetch<{ models: AIModelOption[]; default: string }>("/api/ai/models")
+      .then((data) => {
+        setModels(data.models);
+        setSelectedModel(data.default);
+      })
+      .catch(() => {
+        // Use fallback models
+      });
+  }, []);
 
   // Poll while processing
   useEffect(() => {
@@ -156,7 +180,11 @@ export default function Course() {
     setProcessing(true);
     setError("");
     try {
-      await apiFetch(`/api/ai/summarize/${id}`, { method: "POST" });
+      await apiFetch(`/api/ai/summarize/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selectedModel }),
+      });
       await loadCourse();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Processing failed");
@@ -233,6 +261,23 @@ export default function Course() {
             <p className="mb-4 text-lg text-gray-700">
               PDF uploaded. Ready to process with AI?
             </p>
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <label className="text-sm font-medium text-gray-600">
+                Model:
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={processing}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={startProcessing}
               disabled={processing}
@@ -311,6 +356,23 @@ export default function Course() {
             <p className="text-lg text-red-700">
               Something went wrong while processing.
             </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <label className="text-sm font-medium text-gray-600">
+                Model:
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={processing}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={startProcessing}
               disabled={processing}

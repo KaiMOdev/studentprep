@@ -1,4 +1,4 @@
-import { askClaude } from "./claude.js";
+import { askClaude, type AIModel, DEFAULT_MODEL } from "./claude.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ interface ChapterBoundary {
  * Split raw PDF text into chapters using Claude.
  * Improved: better prompt, fuzzy matching, validation.
  */
-export async function detectChapters(fullText: string): Promise<ChapterData[]> {
+export async function detectChapters(fullText: string, model: AIModel = DEFAULT_MODEL): Promise<ChapterData[]> {
   const textPreview = fullText.slice(0, 80000);
 
   const system = `You are a document structure analyzer. Your job is to identify chapter or section boundaries in academic/course text. You return ONLY raw JSON — no markdown fences, no explanation.`;
@@ -175,7 +175,7 @@ TEXT:
 ${textPreview}
 ---`;
 
-  const response = await askClaude(system, prompt);
+  const response = await askClaude(system, prompt, 8192, model);
   const boundaries: ChapterBoundary[] = parseJsonResponse(response);
 
   if (!boundaries || boundaries.length === 0) {
@@ -226,7 +226,8 @@ ${textPreview}
  */
 export async function summarizeChapter(
   chapterTitle: string,
-  chapterText: string
+  chapterText: string,
+  model: AIModel = DEFAULT_MODEL
 ): Promise<ChapterSummary> {
   const system = `You are an expert academic tutor creating study materials. You produce structured summaries that help students prepare for university exams. Respond in the SAME LANGUAGE as the source material. Return ONLY raw JSON — no markdown fences, no commentary.`;
 
@@ -270,7 +271,7 @@ Chapter: "${chapterTitle}"
 ${chapterText.slice(0, 30000)}
 ---`;
 
-  const response = await askClaude(system, prompt);
+  const response = await askClaude(system, prompt, 8192, model);
   return parseJsonResponse(response);
 }
 
@@ -283,7 +284,8 @@ ${chapterText.slice(0, 30000)}
 export async function generateQuestions(
   chapterTitle: string,
   chapterText: string,
-  summary?: ChapterSummary
+  summary?: ChapterSummary,
+  model: AIModel = DEFAULT_MODEL
 ): Promise<GeneratedQuestions> {
   const summaryContext = summary
     ? `\nKEY TOPICS IDENTIFIED:\n${summary.main_topics.map((t) => `- [${t.importance}] ${t.topic}`).join("\n")}\n`
@@ -344,7 +346,7 @@ Chapter: "${chapterTitle}"
 ${chapterText.slice(0, 30000)}
 ---`;
 
-  const response = await askClaude(system, prompt);
+  const response = await askClaude(system, prompt, 8192, model);
   return parseJsonResponse(response);
 }
 
@@ -357,10 +359,11 @@ ${chapterText.slice(0, 30000)}
 export async function generateMultilingualQuestions(
   chapterTitle: string,
   chapterText: string,
-  summary?: ChapterSummary
+  summary?: ChapterSummary,
+  model: AIModel = DEFAULT_MODEL
 ): Promise<MultilingualQuestions> {
   // Step 1: Generate high-quality questions in the source language
-  const baseQuestions = await generateQuestions(chapterTitle, chapterText, summary);
+  const baseQuestions = await generateQuestions(chapterTitle, chapterText, summary, model);
 
   // Step 2: Translate to all three languages
   const system = `You are a professional academic translator. Translate study questions and answers accurately into English, Dutch, and French. Preserve academic terminology and nuance. Return ONLY raw JSON — no markdown fences.`;
@@ -394,7 +397,7 @@ Return JSON:
   ]
 }`;
 
-  const response = await askClaude(system, prompt);
+  const response = await askClaude(system, prompt, 8192, model);
   return parseJsonResponse(response);
 }
 
@@ -406,7 +409,8 @@ Return JSON:
 export async function generateStudyPlan(
   chapters: { id: string; title: string; importance?: string }[],
   examDate: string,
-  hoursPerDay: number
+  hoursPerDay: number,
+  model: AIModel = DEFAULT_MODEL
 ): Promise<StudyPlanDay[]> {
   const today = new Date().toISOString().split("T")[0];
   const examD = new Date(examDate);
@@ -457,6 +461,6 @@ RULES:
 - Every chapter should be studied at least once and reviewed at least once.
 - The last 1-2 days should be review/practice, not new material.`;
 
-  const response = await askClaude(system, prompt);
+  const response = await askClaude(system, prompt, 8192, model);
   return parseJsonResponse(response);
 }
