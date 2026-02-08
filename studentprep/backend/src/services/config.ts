@@ -55,7 +55,7 @@ export function logConfigStatus(status: ConfigStatus): void {
       "  ⚠ API is NOT ready — Supabase credentials are required."
     );
     console.log(
-      "  Copy backend/.env.example to backend/.env and fill in your values."
+      "  Copy studentprep/backend/.env.example to studentprep/backend/.env and fill in your values."
     );
   }
 

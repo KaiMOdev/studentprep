@@ -30,24 +30,25 @@ Upload your course → get chapter summaries, exam questions, a study schedule, 
 ## Project Structure
 
 ```
-studentprep/
-├── frontend/          # React PWA (Vite + TailwindCSS)
-│   ├── src/
-│   │   ├── components/  # UI, course, quiz, planner components
-│   │   ├── pages/       # Landing, Dashboard, Course, Quiz, StudyPlan, Settings
-│   │   ├── lib/         # Supabase client, API calls, Stripe
-│   │   └── hooks/       # useAuth, useCourse
-│   ├── Dockerfile
-│   └── fly.toml
-├── backend/           # Hono API server
-│   ├── src/
-│   │   ├── routes/      # courses, ai, quiz, payments, pdf
-│   │   ├── services/    # claude, pdf-parser, pdf-generator, wikipedia, stripe, quiz
-│   │   └── middleware/  # Supabase JWT auth
-│   ├── Dockerfile
-│   └── fly.toml
-├── supabase/
-│   └── migrations/    # SQL schema
+repo-root/
+├── studentprep/
+│   ├── frontend/          # React PWA (Vite + TailwindCSS)
+│   │   ├── src/
+│   │   │   ├── components/  # UI, course, quiz, planner components
+│   │   │   ├── pages/       # Landing, Dashboard, Course, Quiz, StudyPlan, Settings
+│   │   │   ├── lib/         # Supabase client, API calls, Stripe
+│   │   │   └── hooks/       # useAuth, useCourse
+│   │   ├── Dockerfile
+│   │   └── fly.toml
+│   ├── backend/           # Hono API server
+│   │   ├── src/
+│   │   │   ├── routes/      # courses, ai, quiz, payments, pdf
+│   │   │   ├── services/    # claude, pdf-parser, pdf-generator, wikipedia, stripe, quiz
+│   │   │   └── middleware/  # Supabase JWT auth
+│   │   ├── Dockerfile
+│   │   └── fly.toml
+│   └── supabase/
+│       └── migrations/    # SQL schema
 ├── PLAN.md            # Full architecture & implementation plan
 └── README.md
 ```
@@ -61,7 +62,7 @@ studentprep/
 
 ### Backend
 ```bash
-cd backend
+cd studentprep/backend
 npm install
 cp .env.example .env  # Add ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
 npm run dev
@@ -69,7 +70,7 @@ npm run dev
 
 ### Frontend
 ```bash
-cd frontend
+cd studentprep/frontend
 npm install
 cp .env.example .env  # Add VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_URL
 npm run dev
@@ -79,7 +80,7 @@ npm run dev
 
 ### Backend
 ```bash
-cd backend
+cd studentprep/backend
 fly launch --name studyflow-api --region ams
 fly secrets set ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_KEY=... STRIPE_SECRET_KEY=...
 fly deploy
@@ -87,7 +88,7 @@ fly deploy
 
 ### Frontend
 ```bash
-cd frontend
+cd studentprep/frontend
 fly launch --name studyflow-app --region ams
 fly deploy
 ```

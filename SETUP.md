@@ -133,7 +133,7 @@ fly auth signup    # or: fly auth login
 
 ### 4.3 Deploy backend
 ```bash
-cd backend
+cd studentprep/backend
 
 # Launch app (first time only)
 fly launch --name studyflow-api --region ams --no-deploy
@@ -153,13 +153,13 @@ fly deploy
 
 ### 4.4 Deploy frontend
 ```bash
-cd frontend
+cd studentprep/frontend
 
 # Launch app (first time only)
 fly launch --name studyflow-app --region ams --no-deploy
 ```
 
-Now edit `frontend/fly.toml` and fill in the build args with your **public** keys:
+Now edit `studentprep/frontend/fly.toml` and fill in the build args with your **public** keys:
 ```toml
 [build.args]
   VITE_SUPABASE_URL = "https://xxx.supabase.co"
@@ -189,21 +189,21 @@ After deploying, go back to Supabase:
 
 **Backend:**
 ```bash
-cd backend
+cd studentprep/backend
 cp .env.example .env
 # Edit .env and fill in your real values
 ```
 
 **Frontend:**
 ```bash
-cd frontend
+cd studentprep/frontend
 cp .env.example .env
 # Edit .env and fill in your real values
 ```
 
 ### 5.2 Install dependencies
 ```bash
-cd backend && npm install
+cd studentprep/backend && npm install
 cd ../frontend && npm install
 ```
 
@@ -212,14 +212,14 @@ Open two terminals:
 
 **Terminal 1 — Backend:**
 ```bash
-cd backend
+cd studentprep/backend
 npm run dev
 # Runs on http://localhost:8080
 ```
 
 **Terminal 2 — Frontend:**
 ```bash
-cd frontend
+cd studentprep/frontend
 npm run dev
 # Runs on http://localhost:5173
 ```

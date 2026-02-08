@@ -53,7 +53,7 @@ app.use("/api/*", async (c, next) => {
         missing: configStatus.missing.filter((v) =>
           ["SUPABASE_URL", "SUPABASE_SERVICE_KEY"].includes(v)
         ),
-        hint: "Copy backend/.env.example to backend/.env and fill in your Supabase project values.",
+        hint: "Copy studentprep/backend/.env.example to studentprep/backend/.env and fill in your Supabase project values.",
       },
       503
     );
