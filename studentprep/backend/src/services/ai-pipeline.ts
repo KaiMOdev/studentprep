@@ -20,12 +20,6 @@ export interface ChapterSummary {
   connections: string[];
 }
 
-export interface MultilingualText {
-  en: string;
-  nl: string;
-  fr: string;
-}
-
 export type BloomLevel =
   | "remember"
   | "understand"
@@ -46,19 +40,6 @@ export interface GeneratedQuestions {
     question: string;
     why_useful: string;
     related_topic: string;
-  }[];
-}
-
-export interface MultilingualQuestions {
-  exam_questions: {
-    question: MultilingualText;
-    suggested_answer: MultilingualText;
-    bloom_level: BloomLevel;
-    difficulty: 1 | 2 | 3;
-  }[];
-  discussion_questions: {
-    question: MultilingualText;
-    why_useful: MultilingualText;
   }[];
 }
 
@@ -397,55 +378,30 @@ ${chapterText.slice(0, 30000)}
   return parseJsonResponse(response);
 }
 
-// ─── Multilingual Questions ──────────────────────────────────────────────────
+// ─── On-demand Translation ──────────────────────────────────────────────────
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  nl: "Dutch",
+  fr: "French",
+};
 
 /**
- * Generate questions in one language, then translate.
- * More token-efficient and higher quality than generating in 3 languages at once.
+ * Translate a single text to a target language.
+ * Uses Sonnet 4.5 for fast, cheap translation.
  */
-export async function generateMultilingualQuestions(
-  chapterTitle: string,
-  chapterText: string,
-  summary?: ChapterSummary,
-  model: AIModel = DEFAULT_MODEL
-): Promise<MultilingualQuestions> {
-  // Step 1: Generate high-quality questions in the source language
-  const baseQuestions = await generateQuestions(chapterTitle, chapterText, summary, model);
+export async function translateText(
+  text: string,
+  targetLang: "en" | "nl" | "fr"
+): Promise<string> {
+  const langName = LANGUAGE_NAMES[targetLang] || targetLang;
 
-  // Step 2: Translate to all three languages
-  const system = `You are a professional academic translator. Translate study questions and answers accurately into English, Dutch, and French. Preserve academic terminology and nuance. Return ONLY raw JSON — no markdown fences.`;
+  const system = `You are a professional academic translator. Translate the given text accurately into ${langName}. Preserve academic terminology and nuance. Return ONLY the translated text — no quotes, no explanation, no markdown.`;
 
-  const prompt = `Translate these exam and discussion questions into English (en), Dutch (nl), and French (fr).
+  const prompt = `Translate the following text into ${langName}:\n\n${text}`;
 
-RULES:
-- Preserve academic and technical terminology accurately in each language.
-- Adapt idioms and phrasing to sound natural in each language.
-- Keep the same meaning and level of detail in all translations.
-- If the original is already in one of the target languages, still include it.
-
-QUESTIONS TO TRANSLATE:
-${JSON.stringify(baseQuestions, null, 2)}
-
-Return JSON:
-{
-  "exam_questions": [
-    {
-      "question": {"en": "...", "nl": "...", "fr": "..."},
-      "suggested_answer": {"en": "...", "nl": "...", "fr": "..."},
-      "bloom_level": "...",
-      "difficulty": 1
-    }
-  ],
-  "discussion_questions": [
-    {
-      "question": {"en": "...", "nl": "...", "fr": "..."},
-      "why_useful": {"en": "...", "nl": "...", "fr": "..."}
-    }
-  ]
-}`;
-
-  const response = await askClaude(system, prompt, 16384, model);
-  return parseJsonResponse(response);
+  const TRANSLATION_MODEL: AIModel = "claude-sonnet-4-5-20250929";
+  return await askClaude(system, prompt, 4096, TRANSLATION_MODEL);
 }
 
 // ─── Study Plan ──────────────────────────────────────────────────────────────

@@ -37,47 +37,105 @@ interface Question {
 }
 
 type Language = "en" | "nl" | "fr";
+type TranslateLang = "nl" | "fr";
 
-const LANGUAGE_LABELS: Record<Language, string> = {
-  en: "English",
-  nl: "Nederlands",
-  fr: "Français",
-};
+const TRANSLATE_OPTIONS: { lang: TranslateLang; label: string; flag: string }[] = [
+  { lang: "nl", label: "NL", flag: "🇳🇱" },
+  { lang: "fr", label: "FR", flag: "🇫🇷" },
+];
 
-function LanguageDropdown({
-  value,
-  onChange,
-  label,
+function TranslateButtons({
+  questionId,
+  field,
+  activeLang,
+  onTranslated,
+  translations,
+  colorScheme,
 }: {
-  value: Language;
-  onChange: (lang: Language) => void;
-  label: string;
+  questionId: string;
+  field: "question" | "answer";
+  activeLang: Language;
+  onTranslated: (lang: Language, text: string) => void;
+  translations?: Translations;
+  colorScheme: "indigo" | "purple";
 }) {
-  return (
-    <label className="flex items-center gap-2 text-xs text-gray-500">
-      <span>{label}:</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as Language)}
-        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-      >
-        {(Object.keys(LANGUAGE_LABELS) as Language[]).map((lang) => (
-          <option key={lang} value={lang}>
-            {LANGUAGE_LABELS[lang]}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
+  const [loading, setLoading] = useState<TranslateLang | null>(null);
 
-function getTranslatedText(
-  original: string,
-  translations: Translations | undefined,
-  lang: Language
-): string {
-  if (lang === "en") return original;
-  return translations?.[lang] || original;
+  const colors = {
+    indigo: {
+      active: "bg-indigo-600 text-white",
+      inactive: "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100",
+      original: "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100",
+      originalActive: "bg-indigo-600 text-white",
+    },
+    purple: {
+      active: "bg-purple-600 text-white",
+      inactive: "bg-white text-purple-700 border-purple-300 hover:bg-purple-100",
+      original: "bg-white text-purple-700 border-purple-300 hover:bg-purple-100",
+      originalActive: "bg-purple-600 text-white",
+    },
+  }[colorScheme];
+
+  const handleTranslate = async (targetLang: TranslateLang) => {
+    // If clicking the already active language, go back to original
+    if (activeLang === targetLang) {
+      onTranslated("en", "");
+      return;
+    }
+
+    // If translation is already cached, use it
+    if (translations?.[targetLang]) {
+      onTranslated(targetLang, translations[targetLang]!);
+      return;
+    }
+
+    // Call API for on-demand translation
+    setLoading(targetLang);
+    try {
+      const data = await apiFetch<{ translation: string }>("/api/ai/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId, field, targetLang }),
+      });
+      onTranslated(targetLang, data.translation);
+    } catch {
+      // Translation failed — stay on current language
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onTranslated("en", "")}
+        className={`rounded-l-md border px-2 py-0.5 text-xs font-medium transition ${
+          activeLang === "en" ? colors.originalActive : colors.original
+        }`}
+      >
+        Original
+      </button>
+      {TRANSLATE_OPTIONS.map((opt) => (
+        <button
+          key={opt.lang}
+          onClick={() => handleTranslate(opt.lang)}
+          disabled={loading !== null}
+          className={`border px-2 py-0.5 text-xs font-medium transition last:rounded-r-md ${
+            activeLang === opt.lang ? colors.active : colors.inactive
+          } disabled:opacity-50`}
+        >
+          {loading === opt.lang ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              {opt.label}
+            </span>
+          ) : (
+            `${opt.flag} ${opt.label}`
+          )}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 interface CourseData {
@@ -549,28 +607,30 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [questionLang, setQuestionLang] = useState<Language>("en");
   const [answerLang, setAnswerLang] = useState<Language>("en");
+  const [qTranslations, setQTranslations] = useState<Translations>(q.question_translations || {});
+  const [aTranslations, setATranslations] = useState<Translations>(q.answer_translations || {});
 
-  const translatedQuestion = getTranslatedText(
-    q.question,
-    q.question_translations,
-    questionLang
-  );
-  const translatedAnswer = getTranslatedText(
-    q.suggested_answer,
-    q.answer_translations,
-    answerLang
-  );
+  const displayQuestion = questionLang === "en" ? q.question : (qTranslations[questionLang] || q.question);
+  const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
         <p className="font-medium text-indigo-900">
-          {index}. {translatedQuestion}
+          {index}. {displayQuestion}
         </p>
-        <LanguageDropdown
-          value={questionLang}
-          onChange={setQuestionLang}
-          label="Q"
+        <TranslateButtons
+          questionId={q.id}
+          field="question"
+          activeLang={questionLang}
+          translations={qTranslations}
+          colorScheme="indigo"
+          onTranslated={(lang, text) => {
+            setQuestionLang(lang);
+            if (lang !== "en" && text) {
+              setQTranslations((prev) => ({ ...prev, [lang]: text }));
+            }
+          }}
         />
       </div>
       <button
@@ -582,13 +642,21 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
       {showAnswer && (
         <div className="mt-2">
           <div className="mb-1 flex justify-end">
-            <LanguageDropdown
-              value={answerLang}
-              onChange={setAnswerLang}
-              label="A"
+            <TranslateButtons
+              questionId={q.id}
+              field="answer"
+              activeLang={answerLang}
+              translations={aTranslations}
+              colorScheme="indigo"
+              onTranslated={(lang, text) => {
+                setAnswerLang(lang);
+                if (lang !== "en" && text) {
+                  setATranslations((prev) => ({ ...prev, [lang]: text }));
+                }
+              }}
             />
           </div>
-          <p className="text-sm text-gray-700">{translatedAnswer}</p>
+          <p className="text-sm text-gray-700">{displayAnswer}</p>
         </div>
       )}
     </div>
@@ -599,28 +667,30 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
   const [showWhy, setShowWhy] = useState(false);
   const [questionLang, setQuestionLang] = useState<Language>("en");
   const [answerLang, setAnswerLang] = useState<Language>("en");
+  const [qTranslations, setQTranslations] = useState<Translations>(q.question_translations || {});
+  const [aTranslations, setATranslations] = useState<Translations>(q.answer_translations || {});
 
-  const translatedQuestion = getTranslatedText(
-    q.question,
-    q.question_translations,
-    questionLang
-  );
-  const translatedAnswer = getTranslatedText(
-    q.suggested_answer,
-    q.answer_translations,
-    answerLang
-  );
+  const displayQuestion = questionLang === "en" ? q.question : (qTranslations[questionLang] || q.question);
+  const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
   return (
     <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
         <p className="font-medium text-purple-900">
-          {index}. {translatedQuestion}
+          {index}. {displayQuestion}
         </p>
-        <LanguageDropdown
-          value={questionLang}
-          onChange={setQuestionLang}
-          label="Q"
+        <TranslateButtons
+          questionId={q.id}
+          field="question"
+          activeLang={questionLang}
+          translations={qTranslations}
+          colorScheme="purple"
+          onTranslated={(lang, text) => {
+            setQuestionLang(lang);
+            if (lang !== "en" && text) {
+              setQTranslations((prev) => ({ ...prev, [lang]: text }));
+            }
+          }}
         />
       </div>
       <button
@@ -632,13 +702,21 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
       {showWhy && (
         <div className="mt-2">
           <div className="mb-1 flex justify-end">
-            <LanguageDropdown
-              value={answerLang}
-              onChange={setAnswerLang}
-              label="A"
+            <TranslateButtons
+              questionId={q.id}
+              field="answer"
+              activeLang={answerLang}
+              translations={aTranslations}
+              colorScheme="purple"
+              onTranslated={(lang, text) => {
+                setAnswerLang(lang);
+                if (lang !== "en" && text) {
+                  setATranslations((prev) => ({ ...prev, [lang]: text }));
+                }
+              }}
             />
           </div>
-          <p className="text-sm text-gray-700">{translatedAnswer}</p>
+          <p className="text-sm text-gray-700">{displayAnswer}</p>
         </div>
       )}
     </div>
