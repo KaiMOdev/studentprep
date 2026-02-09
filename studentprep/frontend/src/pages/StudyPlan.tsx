@@ -27,6 +27,7 @@ export default function StudyPlan() {
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
 
   const loadPlans = useCallback(async () => {
     if (!courseId) return;
@@ -37,7 +38,16 @@ export default function StudyPlan() {
       setPlans(data.plans);
       // Auto-select the most recent plan
       if (data.plans.length > 0 && !activePlan) {
-        setActivePlan(data.plans[0]);
+        const plan = data.plans[0];
+        setActivePlan(plan);
+        // Auto-select today's day if it exists in the plan
+        const todayStr = new Date().toISOString().split("T")[0];
+        const todayIdx = plan.plan.findIndex(
+          (d: PlanDay) => d.date === todayStr
+        );
+        if (todayIdx !== -1) {
+          setSelectedDayIndex(todayIdx);
+        }
       }
     } catch {
       setError("Failed to load study plans");
@@ -202,7 +212,15 @@ export default function StudyPlan() {
             {plans.map((p) => (
               <button
                 key={p.id}
-                onClick={() => setActivePlan(p)}
+                onClick={() => {
+                  setActivePlan(p);
+                  const todayIdx = p.plan.findIndex(
+                    (d) => d.date === today
+                  );
+                  setSelectedDayIndex(
+                    todayIdx !== -1 ? todayIdx : null
+                  );
+                }}
                 className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
                   activePlan?.id === p.id
                     ? "border-indigo-500 bg-indigo-50 text-indigo-700"
@@ -266,7 +284,8 @@ export default function StudyPlan() {
             </div>
 
             {/* Legend */}
-            <div className="mb-2 flex gap-4 text-xs text-gray-500">
+            <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
+            <div className="flex gap-4">
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm border border-indigo-300 bg-indigo-50" />{" "}
                 Study
@@ -280,15 +299,22 @@ export default function StudyPlan() {
                 Buffer
               </span>
             </div>
+              <span className="text-gray-400">Click a day to start its quiz</span>
+            </div>
 
             {activePlan.plan.map((day, i) => {
               const isToday = day.date === today;
               const isPast = day.date < today;
+              const isSelected = selectedDayIndex === i;
+              const hasChapters = day.chapters.length > 0;
 
               return (
                 <div
                   key={i}
-                  className={`rounded-lg border p-4 ${typeColor[day.type]} ${isPast ? "opacity-50" : ""} ${isToday ? "ring-2 ring-indigo-500" : ""}`}
+                  onClick={() =>
+                    setSelectedDayIndex(isSelected ? null : i)
+                  }
+                  className={`cursor-pointer rounded-lg border p-4 transition ${typeColor[day.type]} ${isPast && !isSelected ? "opacity-50" : ""} ${isToday ? "ring-2 ring-indigo-500" : ""} ${isSelected && !isToday ? "ring-2 ring-indigo-400" : ""}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -306,9 +332,14 @@ export default function StudyPlan() {
                           </span>
                         )}
                       </p>
-                      {day.chapters.length > 0 && (
+                      {hasChapters && (
                         <p className="mt-1 text-sm text-gray-600">
                           {day.chapters.map((ch) => ch.title).join(", ")}
+                        </p>
+                      )}
+                      {!hasChapters && day.type === "buffer" && (
+                        <p className="mt-1 text-sm text-gray-400">
+                          Rest day &mdash; no chapters scheduled
                         </p>
                       )}
                     </div>
@@ -325,20 +356,21 @@ export default function StudyPlan() {
                     </div>
                   </div>
 
-                  {isToday &&
-                    day.type === "study" &&
-                    day.chapters.length > 0 && (
-                      <button
-                        onClick={() =>
-                          navigate(
-                            `/quiz/${courseId}?chapters=${day.chapters.map((ch) => ch.id).join(",")}`
-                          )
-                        }
-                        className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                      >
-                        Start quiz for today's chapters
-                      </button>
-                    )}
+                  {isSelected && hasChapters && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(
+                          `/quiz/${courseId}?chapters=${day.chapters.map((ch) => ch.id).join(",")}`
+                        );
+                      }}
+                      className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                    >
+                      Start quiz for{" "}
+                      {isToday ? "today's" : `${new Date(day.date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}{" "}
+                      chapters
+                    </button>
+                  )}
                 </div>
               );
             })}

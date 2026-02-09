@@ -178,8 +178,20 @@ export default function Quiz() {
 
   if (!currentQ) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">No questions available for these chapters.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="text-lg font-medium text-gray-700">
+          No questions available for these chapters
+        </p>
+        <p className="max-w-md text-center text-sm text-gray-500">
+          Questions are generated when the course is processed with AI. Make
+          sure the course has been fully summarized first.
+        </p>
+        <button
+          onClick={() => navigate(`/course/${courseId}`)}
+          className="mt-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          Back to course
+        </button>
       </div>
     );
   }
