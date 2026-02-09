@@ -246,7 +246,56 @@ describe("Course", () => {
     renderCourse();
 
     expect(await screen.findByText("Create Study Plan")).toBeInTheDocument();
-    expect(screen.getByText("Start Quiz (all chapters)")).toBeInTheDocument();
+    // Only ch1 has questions, so button shows partial count
+    expect(screen.getByText("Start Quiz (1 of 2 chapters)")).toBeInTheDocument();
+  });
+
+  it("shows 'all chapters' when every chapter has questions", async () => {
+    const allQuestioned = {
+      ...readyCourse,
+      questions: [
+        ...readyCourse.questions,
+        {
+          id: "q3",
+          chapter_id: "ch2",
+          type: "exam",
+          question: "What is DNA?",
+          suggested_answer: "DNA is...",
+          question_translations: {},
+          answer_translations: {},
+        },
+      ],
+    };
+    vi.mocked(apiFetch).mockImplementation(async (url: string) => {
+      if (url === "/api/courses/course-1") return allQuestioned;
+      if (url === "/api/ai/models") {
+        return {
+          models: [{ id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" }],
+          default: "claude-sonnet-4-5-20250929",
+        };
+      }
+      return {};
+    });
+
+    renderCourse();
+    expect(await screen.findByText("Start Quiz (all chapters)")).toBeInTheDocument();
+  });
+
+  it("shows placeholder when no chapters have questions", async () => {
+    const noQuestions = { ...readyCourse, questions: [] };
+    vi.mocked(apiFetch).mockImplementation(async (url: string) => {
+      if (url === "/api/courses/course-1") return noQuestions;
+      if (url === "/api/ai/models") {
+        return {
+          models: [{ id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" }],
+          default: "claude-sonnet-4-5-20250929",
+        };
+      }
+      return {};
+    });
+
+    renderCourse();
+    expect(await screen.findByText("No chapters have questions yet")).toBeInTheDocument();
   });
 
   it("navigates to study plan page", async () => {
@@ -257,12 +306,13 @@ describe("Course", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/study-plan/course-1");
   });
 
-  it("navigates to quiz with all chapters", async () => {
+  it("navigates to quiz with only chapters that have questions", async () => {
     const user = userEvent.setup();
     renderCourse();
 
-    await user.click(await screen.findByText("Start Quiz (all chapters)"));
-    expect(mockNavigate).toHaveBeenCalledWith("/quiz/course-1?chapters=ch1,ch2");
+    // Only ch1 has questions, so quiz should only include ch1
+    await user.click(await screen.findByText("Start Quiz (1 of 2 chapters)"));
+    expect(mockNavigate).toHaveBeenCalledWith("/quiz/course-1?chapters=ch1");
   });
 
   it("shows processing prompt for uploaded course", async () => {
@@ -415,6 +465,35 @@ describe("Course", () => {
     // After reload, the new question should appear
     await waitFor(() => {
       expect(screen.getByText(/What is DNA\?/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows inline error when Generate Questions fails", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(apiFetch).mockImplementation(async (url: string, options?: any) => {
+      if (url === "/api/ai/questions/ch2" && options?.method === "POST") {
+        throw new Error("AI service unavailable");
+      }
+      if (url === "/api/courses/course-1") return readyCourse;
+      if (url === "/api/ai/models") {
+        return {
+          models: [
+            { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
+          ],
+          default: "claude-sonnet-4-5-20250929",
+        };
+      }
+      return {};
+    });
+
+    renderCourse();
+
+    await user.click(await screen.findByText("2. Genetics"));
+    await user.click(screen.getByText("Generate Questions"));
+
+    await waitFor(() => {
+      expect(screen.getByText("AI service unavailable")).toBeInTheDocument();
     });
   });
 });
