@@ -53,11 +53,25 @@ courseRoutes.get("/:id", async (c) => {
   const chapterIds = (chapters || []).map((ch: any) => ch.id);
   let questions: any[] = [];
   if (chapterIds.length > 0) {
-    const { data } = await supabase
+    const { data, error: qError } = await supabase
       .from("questions")
       .select("id, chapter_id, type, question, suggested_answer, question_translations, answer_translations")
       .in("chapter_id", chapterIds);
-    questions = data || [];
+
+    if (qError) {
+      // Fallback: query without translation columns (migration 002 may not be applied)
+      const { data: fallbackData } = await supabase
+        .from("questions")
+        .select("id, chapter_id, type, question, suggested_answer")
+        .in("chapter_id", chapterIds);
+      questions = (fallbackData || []).map((q: any) => ({
+        ...q,
+        question_translations: {},
+        answer_translations: {},
+      }));
+    } else {
+      questions = data || [];
+    }
   }
 
   return c.json({ course, chapters: chapters || [], questions });
