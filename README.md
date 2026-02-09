@@ -1,5 +1,15 @@
 # StudyFlow — AI-Powered Study Companion
 
+![node](https://img.shields.io/badge/node-20%2B-339933?style=flat-square&logo=node.js&logoColor=white)
+![typescript](https://img.shields.io/badge/typescript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![react](https://img.shields.io/badge/react-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![hono](https://img.shields.io/badge/hono-4.6-E36002?style=flat-square&logo=hono&logoColor=white)
+![supabase](https://img.shields.io/badge/supabase-PostgreSQL-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![claude](https://img.shields.io/badge/AI-Claude-cc785c?style=flat-square&logo=anthropic&logoColor=white)
+![pwa](https://img.shields.io/badge/PWA-enabled-5A0FC8?style=flat-square&logo=pwa&logoColor=white)
+![deploy](https://img.shields.io/badge/deploy-Fly.io-8B5CF6?style=flat-square&logo=fly.io&logoColor=white)
+![status](https://img.shields.io/badge/status-active%20development-2ea44f?style=flat-square)
+
 A mobile-first PWA that transforms course PDFs into structured study materials using Claude AI.
 
 Upload your course → get chapter summaries, exam questions, a study schedule, and mini exams with spaced repetition.
