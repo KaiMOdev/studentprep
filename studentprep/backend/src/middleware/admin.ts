@@ -31,17 +31,21 @@ export const requireAdmin = createMiddleware<{
     return;
   }
 
-  // Fall back to database role check
-  const supabase = getSupabaseAdmin();
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role")
-    .eq("user_id", userId)
-    .single();
+  // Fall back to database role check (gracefully skip if table doesn't exist)
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
 
-  if (profile?.role === "admin") {
-    await next();
-    return;
+    if (profile?.role === "admin") {
+      await next();
+      return;
+    }
+  } catch {
+    // user_profiles table may not exist yet — skip DB check
   }
 
   return c.json({ error: "Admin access required" }, 403);

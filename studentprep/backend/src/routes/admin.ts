@@ -82,10 +82,16 @@ adminRoutes.get("/users", async (c) => {
     .from("subscriptions")
     .select("user_id, plan, status");
 
-  // Get admin profiles
-  const { data: profiles } = await supabase
-    .from("user_profiles")
-    .select("user_id, role");
+  // Get admin profiles (table may not exist if migration hasn't run)
+  let profiles: { user_id: string; role: string }[] | null = null;
+  try {
+    const res = await supabase
+      .from("user_profiles")
+      .select("user_id, role");
+    profiles = res.data;
+  } catch {
+    // user_profiles table may not exist yet
+  }
 
   // Build counts maps
   const courseCountMap: Record<string, number> = {};
@@ -142,7 +148,13 @@ adminRoutes.put("/users/:userId/role", async (c) => {
     );
 
   if (error) {
-    return c.json({ error: error.message }, 500);
+    const msg = error.message || "";
+    if (msg.includes("user_profiles") || msg.includes("schema cache")) {
+      return c.json({
+        error: "user_profiles table not found. Run migration 003_admin_roles.sql in Supabase SQL Editor.",
+      }, 500);
+    }
+    return c.json({ error: msg }, 500);
   }
 
   return c.json({ success: true, userId: targetUserId, role });
@@ -210,14 +222,18 @@ authMeRoutes.get("/me", async (c) => {
   let isAdmin = adminEmails.includes(userEmail.toLowerCase());
 
   if (!isAdmin) {
-    const supabase = getSupabaseAdmin();
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("role")
+        .eq("user_id", userId)
+        .single();
 
-    isAdmin = profile?.role === "admin";
+      isAdmin = profile?.role === "admin";
+    } catch {
+      // user_profiles table may not exist yet
+    }
   }
 
   return c.json({
