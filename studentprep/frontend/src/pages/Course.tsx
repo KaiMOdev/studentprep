@@ -574,19 +574,51 @@ export default function Course() {
                   className="overflow-hidden rounded-lg bg-white shadow-sm"
                 >
                   {/* Chapter header */}
-                  <button
-                    onClick={() =>
-                      setExpandedChapter(isExpanded ? null : chapter.id)
-                    }
-                    className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-gray-50"
-                  >
-                    <h3 className="text-lg font-semibold">
-                      {chapter.sort_order + 1}. {chapter.title}
-                    </h3>
-                    <span className="text-2xl text-gray-400">
-                      {isExpanded ? "\u2212" : "+"}
-                    </span>
-                  </button>
+                  <div className="flex w-full items-center justify-between px-6 py-4 hover:bg-gray-50">
+                    <button
+                      onClick={() =>
+                        setExpandedChapter(isExpanded ? null : chapter.id)
+                      }
+                      className="flex flex-1 items-center text-left"
+                    >
+                      <h3 className="text-lg font-semibold">
+                        {chapter.sort_order + 1}. {chapter.title}
+                      </h3>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          lookupWiki(chapter.id, chapter.title);
+                        }}
+                        title={`Look up "${chapter.title}" on Wikipedia`}
+                        className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-5 w-5"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                          <path d="M2 12h20" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() =>
+                          setExpandedChapter(isExpanded ? null : chapter.id)
+                        }
+                        className="text-2xl text-gray-400"
+                      >
+                        {isExpanded ? "\u2212" : "+"}
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Expanded content */}
                   {isExpanded && (
