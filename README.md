@@ -45,15 +45,15 @@ repo-root/
 │   ├── frontend/          # React PWA (Vite + TailwindCSS)
 │   │   ├── src/
 │   │   │   ├── components/  # UI, course, quiz, planner components
-│   │   │   ├── pages/       # Landing, Dashboard, Course, Quiz, StudyPlan, Settings
+│   │   │   ├── pages/       # Landing, Dashboard, Course, Quiz, StudyPlan, AdminSettings
 │   │   │   ├── lib/         # Supabase client, API calls, Stripe
 │   │   │   └── hooks/       # useAuth, useCourse
 │   │   ├── Dockerfile
 │   │   └── fly.toml
 │   ├── backend/           # Hono API server
 │   │   ├── src/
-│   │   │   ├── routes/      # courses, ai, quiz, payments, pdf
-│   │   │   ├── services/    # claude, pdf-parser, pdf-generator, wikipedia, stripe, quiz
+│   │   │   ├── routes/      # courses, ai, quiz, pdf, wiki, payments, admin
+│   │   │   ├── services/    # claude, ai-pipeline, pdf-parser, pdf-generator, wikipedia, supabase, config
 │   │   │   └── middleware/  # Supabase JWT auth
 │   │   ├── Dockerfile
 │   │   └── fly.toml
@@ -105,11 +105,5 @@ fly deploy
 
 ## Documentation
 
-See [PLAN.md](./PLAN.md) for the full architecture plan including:
-- Database schema with RLS policies
-- API endpoints
-- Claude AI prompt strategy
-- Key user flows
-- Subscription tiers
-- Deployment configuration
-- Implementation phases
+- [PLAN.md](./PLAN.md) — Full architecture plan (schema, API endpoints, AI prompts, implementation phases)
+- [SETUP.md](./SETUP.md) — Step-by-step external services setup (Supabase, Anthropic, Stripe, Fly.io)
