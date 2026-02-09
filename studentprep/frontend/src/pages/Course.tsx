@@ -180,6 +180,7 @@ export default function Course() {
   const [progress, setProgress] = useState<ProcessingProgress | null>(null);
   const [models, setModels] = useState<AIModelOption[]>(FALLBACK_MODELS);
   const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-4-5-20250929");
+  const [generatingQuestions, setGeneratingQuestions] = useState<string | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -271,6 +272,21 @@ export default function Course() {
 
   const getChapterQuestions = (chapterId: string) =>
     questions.filter((q) => q.chapter_id === chapterId);
+
+  const generateChapterQuestions = async (chapterId: string) => {
+    setGeneratingQuestions(chapterId);
+    setError("");
+    try {
+      await apiFetch(`/api/ai/questions/${chapterId}`, { method: "POST" });
+      await loadCourse();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to generate questions"
+      );
+    } finally {
+      setGeneratingQuestions(null);
+    }
+  };
 
   if (!course) {
     return (
@@ -599,6 +615,31 @@ export default function Course() {
                               />
                             ))}
                           </div>
+                        </section>
+                      )}
+
+                      {/* No questions available */}
+                      {examQs.length === 0 && discussionQs.length === 0 && (
+                        <section className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+                          <p className="text-gray-500">
+                            No questions available for this chapter.
+                          </p>
+                          <button
+                            onClick={() =>
+                              generateChapterQuestions(chapter.id)
+                            }
+                            disabled={generatingQuestions === chapter.id}
+                            className="mt-3 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {generatingQuestions === chapter.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Generating...
+                              </span>
+                            ) : (
+                              "Generate Questions"
+                            )}
+                          </button>
                         </section>
                       )}
                     </div>

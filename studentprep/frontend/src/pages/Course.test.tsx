@@ -346,4 +346,75 @@ describe("Course", () => {
     const originalButtons = screen.getAllByText("Original");
     expect(originalButtons.length).toBeGreaterThan(0);
   });
+
+  it("shows 'No questions available' for chapter without questions", async () => {
+    const user = userEvent.setup();
+    renderCourse();
+
+    // ch2 (Genetics) has no questions in the test data
+    await user.click(await screen.findByText("2. Genetics"));
+
+    expect(
+      screen.getByText("No questions available for this chapter.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Generate Questions")).toBeInTheDocument();
+  });
+
+  it("calls API and reloads when Generate Questions is clicked", async () => {
+    const user = userEvent.setup();
+
+    const questionsAfterGenerate = {
+      ...readyCourse,
+      questions: [
+        ...readyCourse.questions,
+        {
+          id: "q3",
+          chapter_id: "ch2",
+          type: "exam",
+          question: "What is DNA?",
+          suggested_answer: "DNA carries genetic information.",
+          question_translations: {},
+          answer_translations: {},
+        },
+      ],
+    };
+
+    let callCount = 0;
+    vi.mocked(apiFetch).mockImplementation(async (url: string, options?: any) => {
+      if (url === "/api/ai/questions/ch2" && options?.method === "POST") {
+        return { message: "Questions generated" };
+      }
+      if (url === "/api/courses/course-1") {
+        callCount++;
+        // After generating questions, return updated data
+        return callCount > 1 ? questionsAfterGenerate : readyCourse;
+      }
+      if (url === "/api/ai/models") {
+        return {
+          models: [
+            { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
+          ],
+          default: "claude-sonnet-4-5-20250929",
+        };
+      }
+      return {};
+    });
+
+    renderCourse();
+
+    await user.click(await screen.findByText("2. Genetics"));
+    await user.click(screen.getByText("Generate Questions"));
+
+    await waitFor(() => {
+      expect(vi.mocked(apiFetch)).toHaveBeenCalledWith(
+        "/api/ai/questions/ch2",
+        { method: "POST" }
+      );
+    });
+
+    // After reload, the new question should appear
+    await waitFor(() => {
+      expect(screen.getByText(/What is DNA\?/)).toBeInTheDocument();
+    });
+  });
 });
