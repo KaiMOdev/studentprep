@@ -231,8 +231,6 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
     type: "exam",
     question: q.question,
     suggested_answer: q.suggested_answer,
-    question_translations: {},
-    answer_translations: {},
   }));
 
   // Insert discussion questions
@@ -241,11 +239,15 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
     type: "discussion",
     question: q.question,
     suggested_answer: q.why_useful,
-    question_translations: {},
-    answer_translations: {},
   }));
 
-  await supabase.from("questions").insert([...examRows, ...discussionRows]);
+  const { error: insertError } = await supabase
+    .from("questions")
+    .insert([...examRows, ...discussionRows]);
+
+  if (insertError) {
+    return c.json({ error: `Failed to save questions: ${insertError.message}` }, 500);
+  }
 
   return c.json({ questions });
 });
@@ -547,8 +549,6 @@ async function processCourse(
           type: "exam",
           question: q.question,
           suggested_answer: q.suggested_answer,
-          question_translations: {},
-          answer_translations: {},
         }));
 
         const discussionRows = questions.discussion_questions.map((q) => ({
@@ -556,12 +556,15 @@ async function processCourse(
           type: "discussion",
           question: q.question,
           suggested_answer: q.why_useful,
-          question_translations: {},
-          answer_translations: {},
         }));
 
         if (examRows.length > 0 || discussionRows.length > 0) {
-          await supabase.from("questions").insert([...examRows, ...discussionRows]);
+          const { error: insertError } = await supabase
+            .from("questions")
+            .insert([...examRows, ...discussionRows]);
+          if (insertError) {
+            console.error(`Failed to insert questions for chapter "${ch.title}":`, insertError.message);
+          }
         }
       } catch (err) {
         console.error(`Failed to generate questions for chapter "${ch.title}":`, err);
