@@ -7,6 +7,7 @@ import { aiRoutes } from "./routes/ai.js";
 import { quizRoutes } from "./routes/quiz.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { pdfRoutes } from "./routes/pdf.js";
+import { wikiRoutes } from "./routes/wiki.js";
 import { validateConfig, logConfigStatus } from "./services/config.js";
 import { isAnthropicConfigured } from "./services/claude.js";
 
@@ -83,6 +84,7 @@ app.route("/api/ai", aiRoutes);
 app.route("/api/quiz", quizRoutes);
 app.route("/api/payments", paymentRoutes);
 app.route("/api/pdf", pdfRoutes);
+app.route("/api/chapters", wikiRoutes);
 
 // Start server
 const port = parseInt(process.env.PORT || "8080");

@@ -143,6 +143,13 @@ function TranslateButtons({
   );
 }
 
+interface WikiResult {
+  title: string;
+  extract: string;
+  url: string;
+  thumbnail?: string;
+}
+
 interface CourseData {
   id: string;
   title: string;
@@ -184,6 +191,10 @@ export default function Course() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [summarizingChapter, setSummarizingChapter] = useState<string | null>(null);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
+  const [wikiResult, setWikiResult] = useState<WikiResult | null>(null);
+  const [wikiLoading, setWikiLoading] = useState(false);
+  const [wikiError, setWikiError] = useState<string | null>(null);
+  const [wikiTopic, setWikiTopic] = useState<string | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -308,6 +319,29 @@ export default function Course() {
     } finally {
       setSummarizingChapter(null);
     }
+  };
+
+  const lookupWiki = async (chapterId: string, topic: string) => {
+    setWikiTopic(topic);
+    setWikiResult(null);
+    setWikiError(null);
+    setWikiLoading(true);
+    try {
+      const data = await apiFetch<WikiResult>(
+        `/api/chapters/${chapterId}/wiki/${encodeURIComponent(topic)}`
+      );
+      setWikiResult(data);
+    } catch {
+      setWikiError("No Wikipedia article found for this topic.");
+    } finally {
+      setWikiLoading(false);
+    }
+  };
+
+  const closeWiki = () => {
+    setWikiResult(null);
+    setWikiError(null);
+    setWikiTopic(null);
   };
 
   if (!course) {
@@ -610,13 +644,14 @@ export default function Course() {
                                           const label = typeof term === "string" ? term : term.term;
                                           const tooltip = typeof term === "string" ? undefined : term.definition;
                                           return (
-                                            <span
+                                            <button
                                               key={j}
-                                              title={tooltip}
-                                              className="rounded bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800"
+                                              title={tooltip ? `${tooltip} (click for Wikipedia)` : "Click for Wikipedia"}
+                                              onClick={() => lookupWiki(chapter.id, label)}
+                                              className="rounded bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800 hover:bg-yellow-300 hover:underline cursor-pointer transition"
                                             >
                                               {label}
-                                            </span>
+                                            </button>
                                           );
                                         })}
                                       </div>
@@ -720,6 +755,79 @@ export default function Course() {
           </div>
         )}
       </main>
+
+      {/* Wikipedia modal */}
+      {(wikiTopic !== null) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={closeWiki}
+        >
+          <div
+            className="mx-4 max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {wikiLoading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+              </div>
+            )}
+
+            {wikiError && (
+              <div>
+                <p className="text-sm text-red-600">{wikiError}</p>
+                <p className="mt-2 text-sm text-gray-500">
+                  Searched for: <span className="font-medium">{wikiTopic}</span>
+                </p>
+                <button
+                  onClick={closeWiki}
+                  className="mt-4 rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+
+            {wikiResult && (
+              <div>
+                <div className="mb-4 flex items-start gap-4">
+                  {wikiResult.thumbnail && (
+                    <img
+                      src={wikiResult.thumbnail}
+                      alt={wikiResult.title}
+                      className="h-20 w-20 shrink-0 rounded-lg object-cover"
+                    />
+                  )}
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {wikiResult.title}
+                    </h3>
+                    <p className="text-xs text-gray-400">Wikipedia</p>
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-line">
+                  {wikiResult.extract}
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <a
+                    href={wikiResult.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    Read full article
+                  </a>
+                  <button
+                    onClick={closeWiki}
+                    className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

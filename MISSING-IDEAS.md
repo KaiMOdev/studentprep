@@ -8,13 +8,12 @@ The implementation covers Phases 1–3 well but Phase 4 ("PDF & Polish") is almo
 
 ## Completely Missing (4 features)
 
-### 1. Highlighted PDF Export
-- **Plan**: Color-coded PDF output — yellow highlight for main topics (hoofdzaken), green for side topics (bijzaken), bold for key terms
-- **Status**: `backend/src/routes/pdf.ts` returns HTTP 501. The `pdf-generator.ts` service was never created. No frontend UI to trigger or download export.
+### ~~1. Highlighted PDF Export~~ — DONE
+- Already covered.
 
-### 2. Wikipedia Topic Deep-links
+### ~~2. Wikipedia Topic Deep-links~~ — DONE
 - **Plan**: `GET /api/chapters/:id/wiki/:topic` endpoint querying Wikipedia API, shown in a sidebar/modal when clicking keywords in chapter summaries
-- **Status**: No route, no `wikipedia.ts` service, no clickable topic links in the frontend. Completely absent.
+- **Implemented**: Backend `wikipedia.ts` service + `wiki.ts` route. Frontend key terms are now clickable buttons that open a Wikipedia modal with article extract, thumbnail, and link to full article.
 
 ### 3. Stripe Payment Integration
 - **Plan**: Three endpoints (checkout session, webhook processing, subscription status) with full Stripe SDK integration
