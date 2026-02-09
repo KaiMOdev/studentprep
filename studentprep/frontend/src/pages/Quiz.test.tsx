@@ -262,7 +262,7 @@ describe("Quiz", () => {
     renderQuiz();
 
     expect(
-      await screen.findByText("No questions available for these chapters.")
+      await screen.findByText("No questions available for the selected chapters")
     ).toBeInTheDocument();
   });
 

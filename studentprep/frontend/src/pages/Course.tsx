@@ -181,6 +181,7 @@ export default function Course() {
   const [models, setModels] = useState<AIModelOption[]>(FALLBACK_MODELS);
   const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-4-5-20250929");
   const [generatingQuestions, setGeneratingQuestions] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -275,12 +276,12 @@ export default function Course() {
 
   const generateChapterQuestions = async (chapterId: string) => {
     setGeneratingQuestions(chapterId);
-    setError("");
+    setGenerateError(null);
     try {
       await apiFetch(`/api/ai/questions/${chapterId}`, { method: "POST" });
       await loadCourse();
     } catch (err) {
-      setError(
+      setGenerateError(
         err instanceof Error ? err.message : "Failed to generate questions"
       );
     } finally {
@@ -463,26 +464,39 @@ export default function Course() {
         )}
 
         {/* Action buttons */}
-        {isReady && chapters.length > 0 && (
-          <div className="mb-8 flex flex-wrap gap-3">
-            <button
-              onClick={() => navigate(`/study-plan/${id}`)}
-              className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700"
-            >
-              Create Study Plan
-            </button>
-            <button
-              onClick={() =>
-                navigate(
-                  `/quiz/${id}?chapters=${chapters.map((c) => c.id).join(",")}`
-                )
-              }
-              className="rounded-lg border border-indigo-300 bg-indigo-50 px-5 py-2.5 font-medium text-indigo-700 hover:bg-indigo-100"
-            >
-              Start Quiz (all chapters)
-            </button>
-          </div>
-        )}
+        {isReady && chapters.length > 0 && (() => {
+          const chaptersWithQuestions = chapters.filter((c) =>
+            questions.some((q) => q.chapter_id === c.id)
+          );
+          return (
+            <div className="mb-8 flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate(`/study-plan/${id}`)}
+                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700"
+              >
+                Create Study Plan
+              </button>
+              {chaptersWithQuestions.length > 0 ? (
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/quiz/${id}?chapters=${chaptersWithQuestions.map((c) => c.id).join(",")}`
+                    )
+                  }
+                  className="rounded-lg border border-indigo-300 bg-indigo-50 px-5 py-2.5 font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  Start Quiz ({chaptersWithQuestions.length === chapters.length
+                    ? "all chapters"
+                    : `${chaptersWithQuestions.length} of ${chapters.length} chapters`})
+                </button>
+              ) : (
+                <span className="rounded-lg border border-gray-300 bg-gray-50 px-5 py-2.5 text-sm text-gray-400">
+                  No chapters have questions yet
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Chapters */}
         {isReady && chapters.length > 0 && (
@@ -640,6 +654,11 @@ export default function Course() {
                               "Generate Questions"
                             )}
                           </button>
+                          {generateError && generatingQuestions !== chapter.id && (
+                            <p className="mt-2 text-sm text-red-600">
+                              {generateError}
+                            </p>
+                          )}
                         </section>
                       )}
                     </div>

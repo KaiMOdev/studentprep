@@ -180,11 +180,11 @@ export default function Quiz() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p className="text-lg font-medium text-gray-700">
-          No questions available for these chapters
+          No questions available for the selected chapters
         </p>
         <p className="max-w-md text-center text-sm text-gray-500">
-          Questions are generated when the course is processed with AI. Make
-          sure the course has been fully summarized first.
+          Go back to the course page and use the &ldquo;Generate
+          Questions&rdquo; button on each chapter to create questions first.
         </p>
         <button
           onClick={() => navigate(`/course/${courseId}`)}
