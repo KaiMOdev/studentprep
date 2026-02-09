@@ -38,6 +38,28 @@ export async function apiFetch<T>(
   return res.json();
 }
 
+export async function apiFetchBlob(
+  path: string,
+  options: RequestInit = {}
+): Promise<Blob> {
+  const headers = await getAuthHeaders();
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      ...headers,
+      ...options.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${res.status}`);
+  }
+
+  return res.blob();
+}
+
 export async function apiUpload<T>(
   path: string,
   formData: FormData
