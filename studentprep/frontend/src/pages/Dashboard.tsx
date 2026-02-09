@@ -18,7 +18,7 @@ interface Course {
   created_at: string;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -141,6 +141,14 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-indigo-600">StudyFlow</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-500">{user?.email}</span>
+            {isAdmin && (
+              <button
+                onClick={() => navigate("/admin/settings")}
+                className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+              >
+                Admin Settings
+              </button>
+            )}
             <button
               onClick={signOut}
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
