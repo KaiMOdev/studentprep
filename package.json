@@ -5,7 +5,9 @@
     "dev:backend": "cd studentprep/backend && npm run dev",
     "dev:frontend": "cd studentprep/frontend && npm run dev",
     "install:all": "cd studentprep/backend && npm install && cd ../frontend && npm install",
+    "prebuild:all": "npm run install:all",
     "build:all": "cd studentprep/backend && npm run build && cd ../frontend && npm run build",
+    "pretypecheck": "npm run install:all",
     "typecheck": "cd studentprep/backend && npm run typecheck && cd ../frontend && npm run typecheck"
   }
 }
