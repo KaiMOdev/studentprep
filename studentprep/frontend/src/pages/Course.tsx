@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiFetch } from "../lib/api";
+import { apiFetch, apiFetchBlob } from "../lib/api";
 
 interface KeyTerm {
   term: string;
@@ -195,6 +195,8 @@ export default function Course() {
   const [wikiLoading, setWikiLoading] = useState(false);
   const [wikiError, setWikiError] = useState<string | null>(null);
   const [wikiTopic, setWikiTopic] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -342,6 +344,31 @@ export default function Course() {
     setWikiResult(null);
     setWikiError(null);
     setWikiTopic(null);
+  };
+
+  const exportHighlightedPdf = async () => {
+    if (!id) return;
+    setExportingPdf(true);
+    setExportError(null);
+    try {
+      const blob = await apiFetchBlob(`/api/pdf/highlighted/${id}`, {
+        method: "POST",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${course?.title || "course"}_StudyFlow.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Failed to export PDF"
+      );
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   if (!course) {
@@ -550,6 +577,23 @@ export default function Course() {
                 <span className="rounded-lg border border-gray-300 bg-gray-50 px-5 py-2.5 text-sm text-gray-400">
                   No chapters have questions yet
                 </span>
+              )}
+              <button
+                onClick={exportHighlightedPdf}
+                disabled={exportingPdf}
+                className="rounded-lg border border-yellow-400 bg-yellow-50 px-5 py-2.5 font-medium text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
+              >
+                {exportingPdf ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-yellow-600 border-t-transparent" />
+                    Generating PDF...
+                  </span>
+                ) : (
+                  "Export Highlighted PDF"
+                )}
+              </button>
+              {exportError && (
+                <p className="w-full text-sm text-red-600">{exportError}</p>
               )}
             </div>
           );
