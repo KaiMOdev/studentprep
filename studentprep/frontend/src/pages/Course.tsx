@@ -151,7 +151,7 @@ interface CourseData {
 }
 
 interface ProcessingProgress {
-  step: "extracting" | "detecting" | "processing_chapter" | "done" | "unknown";
+  step: "extracting" | "detecting" | "processing_chapter" | "generating_questions" | "done" | "unknown";
   currentChapter: number;
   totalChapters: number;
   chapterTitle: string;
@@ -403,12 +403,14 @@ export default function Course() {
                       ? "Detecting chapters..."
                       : progress.step === "processing_chapter"
                         ? `Saving chapter ${progress.currentChapter} of ${progress.totalChapters}`
-                        : "Finishing up..."}
+                        : progress.step === "generating_questions"
+                          ? `Generating questions for chapter ${progress.currentChapter} of ${progress.totalChapters}`
+                          : "Finishing up..."}
               </p>
             </div>
 
             {/* Chapter title */}
-            {progress?.step === "processing_chapter" && progress.chapterTitle && (
+            {(progress?.step === "processing_chapter" || progress?.step === "generating_questions") && progress.chapterTitle && (
               <p className="mb-4 text-center text-sm text-blue-600 truncate">
                 {progress.chapterTitle}
               </p>
