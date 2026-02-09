@@ -56,7 +56,7 @@ repo-root/
 │   │   │   │   ├── Course.tsx       # Single course view (chapters, summary, questions)
 │   │   │   │   ├── StudyPlan.tsx    # Study schedule
 │   │   │   │   ├── Quiz.tsx         # Mini exam page
-│   │   │   │   └── Settings.tsx     # Account, subscription
+│   │   │   │   └── AdminSettings.tsx # Admin dashboard, user management, platform config
 │   │   │   ├── lib/
 │   │   │   │   ├── supabase.ts      # Supabase client init
 │   │   │   │   ├── api.ts           # Backend API calls
@@ -82,15 +82,18 @@ repo-root/
 │   │   │   │   ├── courses.ts       # CRUD courses + chapters
 │   │   │   │   ├── ai.ts            # Claude AI endpoints (summarize, questions, plan)
 │   │   │   │   ├── quiz.ts          # Quiz generation + scoring
+│   │   │   │   ├── pdf.ts           # PDF generation endpoints
+│   │   │   │   ├── wiki.ts          # Wikipedia topic lookup
 │   │   │   │   ├── payments.ts      # Stripe webhooks + checkout
-│   │   │   │   └── pdf.ts           # PDF generation endpoints
+│   │   │   │   └── admin.ts         # Admin stats, user management, config
 │   │   │   ├── services/
 │   │   │   │   ├── claude.ts        # Claude API wrapper
+│   │   │   │   ├── ai-pipeline.ts   # Full AI processing logic
 │   │   │   │   ├── pdf-parser.ts    # PDF text extraction
 │   │   │   │   ├── pdf-generator.ts # Highlighted PDF creation
 │   │   │   │   ├── wikipedia.ts     # Wikipedia API lookup
-│   │   │   │   ├── stripe.ts        # Stripe service
-│   │   │   │   └── quiz.ts          # Quiz logic + spaced repetition
+│   │   │   │   ├── supabase.ts      # Supabase client
+│   │   │   │   └── config.ts        # Environment validation
 │   │   │   └── middleware/
 │   │   │       └── auth.ts          # Supabase JWT verification
 │   │   ├── tsconfig.json
@@ -99,7 +102,9 @@ repo-root/
 │   │   └── fly.toml
 │   └── supabase/
 │       └── migrations/              # Database migrations
-│           └── 001_initial.sql
+│           ├── 001_initial.sql
+│           ├── 002_multilingual_questions.sql
+│           └── 003_admin_roles.sql
 ├── package.json
 ├── README.md
 ├── PLAN.md
@@ -467,32 +472,32 @@ CMD ["node", "dist/index.js"]
 
 ## Implementation Order
 
-### Phase 1 — Foundation
-1. Set up monorepo (frontend + backend folders, package.json, TypeScript configs)
-2. Supabase project: create tables, enable auth, configure storage bucket
-3. Backend: Hono server with auth middleware (verify Supabase JWT)
-4. Frontend: React + Vite + Tailwind + Supabase Auth (login/signup)
-5. Deploy skeleton to Fly.io
+### Phase 1 — Foundation ✅
+1. ✅ Set up monorepo (frontend + backend folders, package.json, TypeScript configs)
+2. ✅ Supabase project: create tables, enable auth, configure storage bucket
+3. ✅ Backend: Hono server with auth middleware (verify Supabase JWT)
+4. ✅ Frontend: React + Vite + Tailwind + Supabase Auth (login/signup)
+5. ✅ Deploy skeleton to Fly.io
 
-### Phase 2 — Core Feature: Upload & Summarize
-6. PDF upload flow (frontend → backend → Supabase Storage)
-7. PDF text extraction (pdf-parse)
-8. Claude API integration: chapter detection + summarization
-9. Display summaries in frontend (main vs side topics)
-10. Exam + discussion question generation
+### Phase 2 — Core Feature: Upload & Summarize ✅
+6. ✅ PDF upload flow (frontend → backend → Supabase Storage)
+7. ✅ PDF text extraction (pdf-parse)
+8. ✅ Claude API integration: chapter detection + summarization
+9. ✅ Display summaries in frontend (main vs side topics)
+10. ✅ Exam + discussion question generation
 
-### Phase 3 — Study Tools
-11. Study plan generation (Claude AI)
-12. Study session tracking
-13. Mini exam / quiz system
-14. Spaced repetition logic
-15. Wikipedia topic lookup
+### Phase 3 — Study Tools ✅
+11. ✅ Study plan generation (Claude AI)
+12. ✅ Study session tracking
+13. ✅ Mini exam / quiz system
+14. ✅ Spaced repetition logic
+15. ✅ Wikipedia topic lookup + admin settings page
 
-### Phase 4 — PDF & Polish
-16. Highlighted PDF generation
-17. PDF download flow
+### Phase 4 — PDF & Polish (in progress)
+16. ✅ Highlighted PDF generation
+17. ✅ PDF download flow
 18. Stripe integration (checkout, webhooks, subscription gating)
-19. PWA setup (manifest, service worker, offline support)
+19. PWA setup (service worker, offline support)
 20. Mobile UI polish
 
 ---
