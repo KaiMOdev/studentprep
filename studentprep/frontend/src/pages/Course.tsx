@@ -182,6 +182,8 @@ export default function Course() {
   const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-4-5-20250929");
   const [generatingQuestions, setGeneratingQuestions] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [summarizingChapter, setSummarizingChapter] = useState<string | null>(null);
+  const [summarizeError, setSummarizeError] = useState<string | null>(null);
 
   const loadCourse = useCallback(async () => {
     if (!id) return;
@@ -289,6 +291,25 @@ export default function Course() {
     }
   };
 
+  const summarizeChapterById = async (chapterId: string) => {
+    setSummarizingChapter(chapterId);
+    setSummarizeError(null);
+    try {
+      await apiFetch(`/api/ai/summarize-chapter/${chapterId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selectedModel }),
+      });
+      await loadCourse();
+    } catch (err) {
+      setSummarizeError(
+        err instanceof Error ? err.message : "Failed to summarize chapter"
+      );
+    } finally {
+      setSummarizingChapter(null);
+    }
+  };
+
   if (!course) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -339,7 +360,7 @@ export default function Course() {
         {isUploaded && (
           <div className="mb-8 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 p-8 text-center">
             <p className="mb-4 text-lg text-gray-700">
-              PDF uploaded. Ready to process with AI?
+              PDF uploaded. Extract chapters with AI?
             </p>
             <div className="mb-4 flex items-center justify-center gap-3">
               <label className="text-sm font-medium text-gray-600">
@@ -363,7 +384,7 @@ export default function Course() {
               disabled={processing}
               className="rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
             >
-              {processing ? "Starting..." : "Summarize with AI"}
+              {processing ? "Starting..." : "Extract Chapters"}
             </button>
           </div>
         )}
@@ -381,7 +402,7 @@ export default function Course() {
                     : progress.step === "detecting"
                       ? "Detecting chapters..."
                       : progress.step === "processing_chapter"
-                        ? `Processing chapter ${progress.currentChapter} of ${progress.totalChapters}`
+                        ? `Saving chapter ${progress.currentChapter} of ${progress.totalChapters}`
                         : "Finishing up..."}
               </p>
             </div>
@@ -534,6 +555,34 @@ export default function Course() {
                   {/* Expanded content */}
                   {isExpanded && (
                     <div className="border-t px-6 py-6 space-y-8">
+                      {/* Summarize button when no summary exists */}
+                      {(!chapter.summary_main || chapter.summary_main.length === 0) && (
+                        <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6 text-center">
+                          <p className="text-gray-600 mb-3">
+                            This chapter has not been summarized yet.
+                          </p>
+                          <button
+                            onClick={() => summarizeChapterById(chapter.id)}
+                            disabled={summarizingChapter === chapter.id}
+                            className="rounded-lg bg-yellow-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-yellow-600 disabled:opacity-50"
+                          >
+                            {summarizingChapter === chapter.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Summarizing...
+                              </span>
+                            ) : (
+                              "Summarize Chapter"
+                            )}
+                          </button>
+                          {summarizeError && summarizingChapter !== chapter.id && (
+                            <p className="mt-2 text-sm text-red-600">
+                              {summarizeError}
+                            </p>
+                          )}
+                        </section>
+                      )}
+
                       {/* Main topics */}
                       {chapter.summary_main &&
                         chapter.summary_main.length > 0 && (

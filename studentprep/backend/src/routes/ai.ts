@@ -250,6 +250,51 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
   return c.json({ questions });
 });
 
+// Summarize a single chapter on demand
+aiRoutes.post("/summarize-chapter/:chapterId", async (c) => {
+  const userId = c.get("userId");
+  const chapterId = c.req.param("chapterId");
+  const supabase = getSupabaseAdmin();
+
+  // Verify ownership through chapter → course → user
+  const { data: chapter } = await supabase
+    .from("chapters")
+    .select("*, courses!inner(user_id)")
+    .eq("id", chapterId)
+    .single();
+
+  if (!chapter || chapter.courses.user_id !== userId) {
+    return c.json({ error: "Chapter not found" }, 404);
+  }
+
+  // Check if summary already exists
+  if (chapter.summary_main && chapter.summary_main.length > 0) {
+    return c.json({ message: "Summary already generated", summary_main: chapter.summary_main, summary_side: chapter.summary_side });
+  }
+
+  // Parse model from request body
+  let model: AIModel = DEFAULT_MODEL;
+  try {
+    const body = await c.req.json();
+    model = parseModel(body.model);
+  } catch {
+    // No body or invalid JSON — use default model
+  }
+
+  const summary = await summarizeChapter(chapter.title, chapter.raw_text, model);
+
+  // Update chapter with summary
+  await supabase
+    .from("chapters")
+    .update({
+      summary_main: summary.main_topics,
+      summary_side: summary.side_topics,
+    })
+    .eq("id", chapterId);
+
+  return c.json({ summary_main: summary.main_topics, summary_side: summary.side_topics });
+});
+
 // Translate a question or answer on demand (uses Sonnet 4.5 for speed)
 aiRoutes.post("/translate", async (c) => {
   const userId = c.get("userId");
@@ -444,7 +489,7 @@ async function processCourse(
 
   const chapters = await detectChapters(fullText, model);
 
-  // 4. For each chapter: summarize + generate questions
+  // 4. Insert chapters without summaries (summaries are generated on-demand per chapter)
   for (let i = 0; i < chapters.length; i++) {
     // Check for cancellation between chapters
     if (cancelledCourses.has(courseId)) {
@@ -463,50 +508,17 @@ async function processCourse(
       chapterTitle: ch.title,
     });
 
-    // Summarize
-    const summary = await summarizeChapter(ch.title, ch.content, model);
-
-    // Insert chapter
-    const { data: chapterRow } = await supabase
+    // Insert chapter with raw text only — no summary yet
+    await supabase
       .from("chapters")
       .insert({
         course_id: courseId,
         title: ch.title,
         raw_text: ch.content,
-        summary_main: summary.main_topics,
-        summary_side: summary.side_topics,
+        summary_main: null,
+        summary_side: null,
         sort_order: i,
-      })
-      .select("id")
-      .single();
-
-    if (!chapterRow) continue;
-
-    // Generate questions in source language
-    const questions = await generateQuestions(ch.title, ch.content, summary, model);
-
-    const questionRows = [
-      ...questions.exam_questions.map((q) => ({
-        chapter_id: chapterRow.id,
-        type: "exam" as const,
-        question: q.question,
-        suggested_answer: q.suggested_answer,
-        question_translations: {},
-        answer_translations: {},
-      })),
-      ...questions.discussion_questions.map((q) => ({
-        chapter_id: chapterRow.id,
-        type: "discussion" as const,
-        question: q.question,
-        suggested_answer: q.why_useful,
-        question_translations: {},
-        answer_translations: {},
-      })),
-    ];
-
-    if (questionRows.length > 0) {
-      await supabase.from("questions").insert(questionRows);
-    }
+      });
   }
 
   // 5. Mark course as ready
