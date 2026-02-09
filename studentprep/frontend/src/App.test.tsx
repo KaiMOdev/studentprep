@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import { supabase } from "./lib/supabase";
+import { apiFetch } from "./lib/api";
 
 // We need to mock useAuth at the hook level to control user state
 vi.mock("./hooks/useAuth", () => ({
@@ -108,6 +109,8 @@ describe("App routing", () => {
         signUpWithEmail: vi.fn(),
         signOut: vi.fn(),
       });
+      // App.tsx calls apiFetch("/api/auth/me") for admin check
+      vi.mocked(apiFetch).mockResolvedValue({ user: { isAdmin: false } });
     });
 
     it("redirects / to /dashboard", () => {
