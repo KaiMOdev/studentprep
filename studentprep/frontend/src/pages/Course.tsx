@@ -45,8 +45,8 @@ type Language = "en" | "nl" | "fr";
 type TranslateLang = "nl" | "fr";
 
 const TRANSLATE_OPTIONS: { lang: TranslateLang; label: string; flag: string }[] = [
-  { lang: "nl", label: "NL", flag: "🇳🇱" },
-  { lang: "fr", label: "FR", flag: "🇫🇷" },
+  { lang: "nl", label: "NL", flag: "\uD83C\uDDF3\uD83C\uDDF1" },
+  { lang: "fr", label: "FR", flag: "\uD83C\uDDEB\uD83C\uDDF7" },
 ];
 
 function TranslateButtons({
@@ -82,19 +82,16 @@ function TranslateButtons({
   }[colorScheme];
 
   const handleTranslate = async (targetLang: TranslateLang) => {
-    // If clicking the already active language, go back to original
     if (activeLang === targetLang) {
       onTranslated("en", "");
       return;
     }
 
-    // If translation is already cached, use it
     if (translations?.[targetLang]) {
       onTranslated(targetLang, translations[targetLang]!);
       return;
     }
 
-    // Call API for on-demand translation
     setLoading(targetLang);
     try {
       const data = await apiFetch<{ translation: string }>("/api/ai/translate", {
@@ -174,6 +171,20 @@ const FALLBACK_MODELS: AIModelOption[] = [
   { id: "claude-opus-4-6", label: "Opus 4.6" },
 ];
 
+/* ── Processing stepper config ── */
+const STEPPER_STEPS = [
+  { key: "extracting", label: "Extract" },
+  { key: "detecting", label: "Detect" },
+  { key: "processing_chapter", label: "Summarize" },
+  { key: "generating_questions", label: "Questions" },
+  { key: "done", label: "Done" },
+] as const;
+
+function stepIndex(step: string): number {
+  const idx = STEPPER_STEPS.findIndex((s) => s.key === step);
+  return idx >= 0 ? idx : 0;
+}
+
 export default function Course() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -218,7 +229,6 @@ export default function Course() {
     loadCourse();
   }, [loadCourse]);
 
-  // Fetch available AI models
   useEffect(() => {
     apiFetch<{ models: AIModelOption[]; default: string }>("/api/ai/models")
       .then((data) => {
@@ -373,7 +383,7 @@ export default function Course() {
 
   if (!course) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50/50">
         {error ? (
           <p className="text-red-600">{error}</p>
         ) : (
@@ -388,40 +398,51 @@ export default function Course() {
   const isUploaded = course.status === "uploaded";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top bar */}
-      <header className="border-b bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
+    <div className="min-h-screen bg-gray-50/50">
+      {/* Glassmorphic top bar */}
+      <header className="glass-header sticky top-0 z-30 border-b border-gray-200/60 px-6 py-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
           <button
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+            className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition"
           >
-            &larr; Back to courses
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Back to courses
           </button>
-          <h1 className="text-xl font-bold text-indigo-600">StudyFlow</h1>
+          <h1 className="text-xl font-extrabold tracking-tight text-indigo-600">StudyFlow</h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8">
+      <main className="mx-auto max-w-5xl px-6 py-8">
         {/* Course header */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold">{course.title}</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight">{course.title}</h2>
           <p className="mt-1 text-sm text-gray-500">
             Uploaded {new Date(course.created_at).toLocaleDateString("en-GB")}
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200 animate-fade-in-up">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
             {error}
           </div>
         )}
 
-        {/* Status + action */}
+        {/* Status + action: Uploaded */}
         {isUploaded && (
-          <div className="mb-8 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 p-8 text-center">
-            <p className="mb-4 text-lg text-gray-700">
-              PDF uploaded. Extract chapters with AI?
+          <div className="mb-8 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-8 text-center animate-fade-in-up">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100">
+              <svg className="h-7 w-7 text-indigo-600" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" />
+              </svg>
+            </div>
+            <p className="mb-4 text-lg font-semibold text-gray-700">
+              PDF uploaded. Ready to process with AI?
             </p>
             <div className="mb-4 flex items-center justify-center gap-3">
               <label className="text-sm font-medium text-gray-600">
@@ -431,7 +452,7 @@ export default function Course() {
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
                 disabled={processing}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -443,19 +464,66 @@ export default function Course() {
             <button
               onClick={startProcessing}
               disabled={processing}
-              className="rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              className="btn-press rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50 shadow-sm shadow-indigo-200"
             >
-              {processing ? "Starting..." : "Extract Chapters"}
+              {processing ? "Starting..." : "Summarize with AI"}
             </button>
           </div>
         )}
 
+        {/* Processing state with stepper */}
         {isProcessing && (
-          <div className="mb-8 rounded-xl bg-blue-50 p-8">
+          <div className="mb-8 rounded-2xl bg-gradient-to-br from-blue-50 to-white p-8 ring-1 ring-blue-100 animate-fade-in-up">
+            {/* Stepper */}
+            <div className="mx-auto mb-6 max-w-lg">
+              <div className="relative flex items-center justify-between">
+                {/* Background line */}
+                <div className="stepper-line" />
+                {/* Active line */}
+                <div
+                  className="stepper-line stepper-line-active"
+                  style={{
+                    width: progress
+                      ? `${(stepIndex(progress.step) / (STEPPER_STEPS.length - 1)) * 100}%`
+                      : "0%",
+                  }}
+                />
+                {STEPPER_STEPS.map((step, i) => {
+                  const currentIdx = progress ? stepIndex(progress.step) : -1;
+                  const isActive = i === currentIdx;
+                  const isDone = i < currentIdx;
+                  return (
+                    <div key={step.key} className="relative z-10 flex flex-col items-center">
+                      <div
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition ${
+                          isDone
+                            ? "bg-indigo-600 text-white"
+                            : isActive
+                              ? "bg-indigo-600 text-white ring-4 ring-indigo-100"
+                              : "bg-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {isDone ? (
+                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          i + 1
+                        )}
+                      </div>
+                      <span className={`mt-1.5 text-xs font-medium ${isActive || isDone ? "text-indigo-700" : "text-gray-400"}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Step label */}
             <div className="mb-3 flex items-center justify-center gap-2">
               <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-blue-500 border-t-transparent" />
-              <p className="text-lg font-medium text-blue-700">
+              <p className="text-lg font-semibold text-blue-700">
                 {!progress || progress.step === "unknown"
                   ? "Starting..."
                   : progress.step === "extracting"
@@ -480,7 +548,7 @@ export default function Course() {
             {/* Progress bar */}
             {progress && progress.totalChapters > 0 ? (
               <div className="mx-auto max-w-md">
-                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-200">
+                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-100">
                   <div
                     className="h-full rounded-full bg-blue-500 transition-all duration-500"
                     style={{
@@ -494,7 +562,7 @@ export default function Course() {
               </div>
             ) : (
               <div className="mx-auto max-w-md">
-                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-200">
+                <div className="mb-2 h-3 overflow-hidden rounded-full bg-blue-100">
                   <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-400" />
                 </div>
                 <p className="text-center text-xs text-blue-500">
@@ -507,7 +575,7 @@ export default function Course() {
               <button
                 onClick={cancelProcessing}
                 disabled={cancelling}
-                className="rounded-lg border border-red-300 bg-white px-5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="btn-press rounded-xl border border-red-200 bg-white px-5 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition"
               >
                 {cancelling ? "Stopping..." : "Stop processing"}
               </button>
@@ -516,8 +584,13 @@ export default function Course() {
         )}
 
         {course.status === "error" && (
-          <div className="mb-8 rounded-xl bg-red-50 p-8 text-center">
-            <p className="text-lg text-red-700">
+          <div className="mb-8 rounded-2xl bg-red-50 p-8 text-center ring-1 ring-red-200 animate-fade-in-up">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100">
+              <svg className="h-7 w-7 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-lg font-semibold text-red-700">
               Something went wrong while processing.
             </p>
             <div className="mt-4 flex items-center justify-center gap-3">
@@ -528,7 +601,7 @@ export default function Course() {
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
                 disabled={processing}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -540,7 +613,7 @@ export default function Course() {
             <button
               onClick={startProcessing}
               disabled={processing}
-              className="mt-4 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+              className="btn-press mt-4 rounded-xl bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
             >
               {processing ? "Starting..." : "Retry"}
             </button>
@@ -556,7 +629,7 @@ export default function Course() {
             <div className="mb-8 flex flex-wrap gap-3">
               <button
                 onClick={() => navigate(`/study-plan/${id}`)}
-                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700"
+                className="btn-press rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition"
               >
                 Create Study Plan
               </button>
@@ -567,21 +640,21 @@ export default function Course() {
                       `/quiz/${id}?chapters=${chaptersWithQuestions.map((c) => c.id).join(",")}`
                     )
                   }
-                  className="rounded-lg border border-indigo-300 bg-indigo-50 px-5 py-2.5 font-medium text-indigo-700 hover:bg-indigo-100"
+                  className="btn-press rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-2.5 font-semibold text-indigo-700 hover:bg-indigo-100 transition"
                 >
                   Start Quiz ({chaptersWithQuestions.length === chapters.length
                     ? "all chapters"
                     : `${chaptersWithQuestions.length} of ${chapters.length} chapters`})
                 </button>
               ) : (
-                <span className="rounded-lg border border-gray-300 bg-gray-50 px-5 py-2.5 text-sm text-gray-400">
+                <span className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-2.5 text-sm text-gray-400">
                   No chapters have questions yet
                 </span>
               )}
               <button
                 onClick={exportHighlightedPdf}
                 disabled={exportingPdf}
-                className="rounded-lg border border-yellow-400 bg-yellow-50 px-5 py-2.5 font-medium text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
+                className="btn-press rounded-xl border border-yellow-300 bg-yellow-50 px-5 py-2.5 font-semibold text-yellow-700 hover:bg-yellow-100 disabled:opacity-50 transition"
               >
                 {exportingPdf ? (
                   <span className="inline-flex items-center gap-2">
@@ -615,10 +688,10 @@ export default function Course() {
               return (
                 <div
                   key={chapter.id}
-                  className="overflow-hidden rounded-lg bg-white shadow-sm"
+                  className="card-interactive overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100"
                 >
                   {/* Chapter header */}
-                  <div className="flex w-full items-center justify-between px-6 py-4 hover:bg-gray-50">
+                  <div className="flex w-full items-center justify-between px-6 py-4 hover:bg-gray-50 transition">
                     <button
                       onClick={() =>
                         setExpandedChapter(isExpanded ? null : chapter.id)
@@ -636,7 +709,7 @@ export default function Course() {
                           lookupWiki(chapter.id, chapter.title);
                         }}
                         title={`Look up "${chapter.title}" on Wikipedia`}
-                        className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -657,26 +730,28 @@ export default function Course() {
                         onClick={() =>
                           setExpandedChapter(isExpanded ? null : chapter.id)
                         }
-                        className="text-2xl text-gray-400"
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                       >
-                        {isExpanded ? "\u2212" : "+"}
+                        <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
                       </button>
                     </div>
                   </div>
 
                   {/* Expanded content */}
                   {isExpanded && (
-                    <div className="border-t px-6 py-6 space-y-8">
+                    <div className="border-t px-6 py-6 space-y-8 animate-fade-in-up">
                       {/* Summarize button when no summary exists */}
                       {(!chapter.summary_main || chapter.summary_main.length === 0) && (
-                        <section className="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6 text-center">
+                        <section className="rounded-xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-white p-6 text-center">
                           <p className="text-gray-600 mb-3">
                             This chapter has not been summarized yet.
                           </p>
                           <button
                             onClick={() => summarizeChapterById(chapter.id)}
                             disabled={summarizingChapter === chapter.id}
-                            className="rounded-lg bg-yellow-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-yellow-600 disabled:opacity-50"
+                            className="btn-press rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-yellow-600 disabled:opacity-50"
                           >
                             {summarizingChapter === chapter.id ? (
                               <span className="inline-flex items-center gap-2">
@@ -707,7 +782,7 @@ export default function Course() {
                               {chapter.summary_main.map((topic, i) => (
                                 <div
                                   key={i}
-                                  className="rounded-lg border-l-4 border-yellow-400 bg-yellow-50 p-4"
+                                  className="rounded-xl border-l-4 border-yellow-400 bg-yellow-50/80 p-4"
                                 >
                                   <p className="font-medium">{topic.topic}</p>
                                   <p className="mt-1 text-sm text-gray-700">
@@ -724,7 +799,7 @@ export default function Course() {
                                               key={j}
                                               title={tooltip ? `${tooltip} (click for Wikipedia)` : "Click for Wikipedia"}
                                               onClick={() => lookupWiki(chapter.id, label)}
-                                              className="rounded bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800 hover:bg-yellow-300 hover:underline cursor-pointer transition"
+                                              className="rounded-lg bg-yellow-200 px-2.5 py-0.5 text-xs font-medium text-yellow-800 hover:bg-yellow-300 hover:underline cursor-pointer transition"
                                             >
                                               {label}
                                             </button>
@@ -750,7 +825,7 @@ export default function Course() {
                               {chapter.summary_side.map((topic, i) => (
                                 <div
                                   key={i}
-                                  className="rounded-lg border-l-4 border-green-400 bg-green-50 p-4"
+                                  className="rounded-xl border-l-4 border-green-400 bg-green-50/80 p-4"
                                 >
                                   <p className="font-medium">{topic.topic}</p>
                                   <p className="mt-1 text-sm text-gray-700">
@@ -796,7 +871,7 @@ export default function Course() {
 
                       {/* No questions available */}
                       {examQs.length === 0 && discussionQs.length === 0 && (
-                        <section className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+                        <section className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
                           <p className="text-gray-500">
                             No questions available for this chapter.
                           </p>
@@ -805,7 +880,7 @@ export default function Course() {
                               generateChapterQuestions(chapter.id)
                             }
                             disabled={generatingQuestions === chapter.id}
-                            className="mt-3 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                            className="btn-press mt-3 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
                           >
                             {generatingQuestions === chapter.id ? (
                               <span className="inline-flex items-center gap-2">
@@ -839,7 +914,7 @@ export default function Course() {
           onClick={closeWiki}
         >
           <div
-            className="mx-4 max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl"
+            className="mx-4 max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-gray-100 animate-fade-in-up"
             onClick={(e) => e.stopPropagation()}
           >
             {wikiLoading && (
@@ -856,7 +931,7 @@ export default function Course() {
                 </p>
                 <button
                   onClick={closeWiki}
-                  className="mt-4 rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200"
+                  className="btn-press mt-4 rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
                 >
                   Close
                 </button>
@@ -870,7 +945,7 @@ export default function Course() {
                     <img
                       src={wikiResult.thumbnail}
                       alt={wikiResult.title}
-                      className="h-20 w-20 shrink-0 rounded-lg object-cover"
+                      className="h-20 w-20 shrink-0 rounded-xl object-cover"
                     />
                   )}
                   <div>
@@ -888,13 +963,13 @@ export default function Course() {
                     href={wikiResult.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    className="btn-press rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     Read full article
                   </a>
                   <button
                     onClick={closeWiki}
-                    className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200"
+                    className="btn-press rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
                   >
                     Close
                   </button>
@@ -919,7 +994,7 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
   const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
   return (
-    <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
         <p className="font-medium text-indigo-900">
           {index}. {displayQuestion}
@@ -979,7 +1054,7 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
   const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
   return (
-    <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+    <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
         <p className="font-medium text-purple-900">
           {index}. {displayQuestion}
