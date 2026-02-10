@@ -19,7 +19,7 @@ const cancelledCourses = new Set<string>();
 
 // Track processing progress per course
 interface ProcessingProgress {
-  step: "extracting" | "detecting" | "processing_chapter" | "generating_questions" | "done";
+  step: "extracting" | "detecting" | "summarizing" | "generating_questions" | "done";
   currentChapter: number;
   totalChapters: number;
   chapterTitle: string;
@@ -491,7 +491,7 @@ async function processCourse(
 
   const chapters = await detectChapters(fullText, model);
 
-  // 4. Insert chapters without summaries (summaries are generated on-demand per chapter)
+  // 4. Process each chapter: insert → summarize → generate questions
   for (let i = 0; i < chapters.length; i++) {
     // Check for cancellation between chapters
     if (cancelledCourses.has(courseId)) {
@@ -503,28 +503,37 @@ async function processCourse(
 
     const ch = chapters[i];
 
+    // 4a. Summarize chapter
     processingProgress.set(courseId, {
-      step: "processing_chapter",
+      step: "summarizing",
       currentChapter: i + 1,
       totalChapters: chapters.length,
       chapterTitle: ch.title,
     });
 
-    // Insert chapter with raw text only — no summary yet
+    let summary: Awaited<ReturnType<typeof summarizeChapter>> | null = null;
+    try {
+      summary = await summarizeChapter(ch.title, ch.content, model);
+    } catch (err) {
+      console.error(`Failed to summarize chapter "${ch.title}":`, err);
+      // Continue without summary — questions will still be generated from raw text
+    }
+
+    // Insert chapter with summary (or null if summarization failed)
     const { data: insertedChapter } = await supabase
       .from("chapters")
       .insert({
         course_id: courseId,
         title: ch.title,
         raw_text: ch.content,
-        summary_main: null,
-        summary_side: null,
+        summary_main: summary?.main_topics ?? null,
+        summary_side: summary?.side_topics ?? null,
         sort_order: i,
       })
       .select("id")
       .single();
 
-    // Generate questions for this chapter based on its content
+    // 4b. Generate questions for this chapter (using summary for better targeting)
     if (insertedChapter) {
       // Check for cancellation before generating questions
       if (cancelledCourses.has(courseId)) {
@@ -542,7 +551,7 @@ async function processCourse(
       });
 
       try {
-        const questions = await generateQuestions(ch.title, ch.content, undefined, model);
+        const questions = await generateQuestions(ch.title, ch.content, summary ?? undefined, model);
 
         const examRows = questions.exam_questions.map((q) => ({
           chapter_id: insertedChapter.id,

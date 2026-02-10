@@ -155,7 +155,7 @@ interface CourseData {
 }
 
 interface ProcessingProgress {
-  step: "extracting" | "detecting" | "processing_chapter" | "generating_questions" | "done" | "unknown";
+  step: "extracting" | "detecting" | "summarizing" | "generating_questions" | "done" | "unknown";
   currentChapter: number;
   totalChapters: number;
   chapterTitle: string;
@@ -175,12 +175,15 @@ const FALLBACK_MODELS: AIModelOption[] = [
 const STEPPER_STEPS = [
   { key: "extracting", label: "Extract" },
   { key: "detecting", label: "Detect" },
-  { key: "processing_chapter", label: "Summarize" },
-  { key: "generating_questions", label: "Questions" },
+  { key: "chapters", label: "Chapters" },
   { key: "done", label: "Done" },
 ] as const;
 
 function stepIndex(step: string): number {
+  // Both summarizing and generating_questions map to the "Chapters" step
+  if (step === "summarizing" || step === "generating_questions") {
+    return STEPPER_STEPS.findIndex((s) => s.key === "chapters");
+  }
   const idx = STEPPER_STEPS.findIndex((s) => s.key === step);
   return idx >= 0 ? idx : 0;
 }
@@ -530,8 +533,8 @@ export default function Course() {
                     ? "Extracting text from PDF..."
                     : progress.step === "detecting"
                       ? "Detecting chapters..."
-                      : progress.step === "processing_chapter"
-                        ? `Saving chapter ${progress.currentChapter} of ${progress.totalChapters}`
+                      : progress.step === "summarizing"
+                        ? `Summarizing chapter ${progress.currentChapter} of ${progress.totalChapters}`
                         : progress.step === "generating_questions"
                           ? `Generating questions for chapter ${progress.currentChapter} of ${progress.totalChapters}`
                           : "Finishing up..."}
@@ -539,7 +542,7 @@ export default function Course() {
             </div>
 
             {/* Chapter title */}
-            {(progress?.step === "processing_chapter" || progress?.step === "generating_questions") && progress.chapterTitle && (
+            {(progress?.step === "summarizing" || progress?.step === "generating_questions") && progress.chapterTitle && (
               <p className="mb-4 text-center text-sm text-blue-600 truncate">
                 {progress.chapterTitle}
               </p>
@@ -552,12 +555,18 @@ export default function Course() {
                   <div
                     className="h-full rounded-full bg-blue-500 transition-all duration-500"
                     style={{
-                      width: `${Math.round((progress.currentChapter / progress.totalChapters) * 100)}%`,
+                      width: `${Math.round(
+                        ((progress.currentChapter - 1 + (progress.step === "generating_questions" ? 0.5 : 0)) /
+                          progress.totalChapters) *
+                          100
+                      )}%`,
                     }}
                   />
                 </div>
                 <p className="text-center text-xs text-blue-500">
-                  {progress.currentChapter} / {progress.totalChapters} chapters
+                  Chapter {progress.currentChapter} of {progress.totalChapters}
+                  {" \u2014 "}
+                  {progress.step === "summarizing" ? "summarizing" : "generating questions"}
                 </p>
               </div>
             ) : (
