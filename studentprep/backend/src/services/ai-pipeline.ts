@@ -103,9 +103,53 @@ function sanitizeJsonControlChars(text: string): string {
 }
 
 /**
+ * Aggressively sanitize JSON text when string-aware sanitization fails.
+ * Fixes invalid escape sequences and replaces ALL control characters
+ * (including newlines) with spaces. JSON structure is preserved because
+ * spaces are valid whitespace between tokens. String values lose their
+ * newlines but that's acceptable vs. failing entirely.
+ */
+function aggressiveSanitize(text: string): string {
+  return text
+    // Fix invalid JSON escape sequences (e.g. \H, \S, \C from PDF file paths).
+    // Valid JSON escapes: \" \\ \/ \b \f \n \r \t \uXXXX
+    .replace(/\\(?!["\\\/bfnrtu])/g, "\\\\")
+    // Replace ALL control characters (including newlines/tabs) with spaces.
+    // This works because spaces are valid JSON whitespace between tokens,
+    // and inside strings the values just lose newlines (acceptable trade-off).
+    .replace(/[\x00-\x1f]/g, " ")
+    // Fix trailing commas
+    .replace(/,\s*([}\]])/g, "$1");
+}
+
+/**
+ * Try multiple parse strategies on a piece of text.
+ * Returns the parsed result or null if all strategies fail.
+ */
+function tryParseJson<T>(text: string): T | null {
+  // Direct parse
+  try { return JSON.parse(text); } catch { /* continue */ }
+
+  // Extract JSON from surrounding text
+  const jsonMatch = text.match(/[\[{][\s\S]*[\]}]/);
+  if (jsonMatch) {
+    const extracted = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
+    try { return JSON.parse(extracted); } catch { /* continue */ }
+  }
+
+  // Repair truncated JSON
+  const repaired = repairTruncatedJson(text);
+  if (repaired) {
+    try { return JSON.parse(repaired); } catch { /* continue */ }
+  }
+
+  return null;
+}
+
+/**
  * Strip markdown code fences from Claude's response and parse JSON.
  * Handles partial fences, trailing commas, unescaped control characters,
- * and truncated responses.
+ * invalid escape sequences, and truncated responses.
  */
 function parseJsonResponse<T>(text: string): T {
   let cleaned = text
@@ -116,35 +160,45 @@ function parseJsonResponse<T>(text: string): T {
   // Fix trailing commas before } or ] (common Claude mistake)
   cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
 
+  // Fix invalid escape sequences (e.g. \H, \S, \C from PDF paths/content).
+  // Must run BEFORE sanitizeJsonControlChars so it doesn't confuse string tracking.
+  cleaned = cleaned.replace(/\\(?!["\\\/bfnrtu])/g, "\\\\");
+
   // Sanitize control characters inside JSON string values
   cleaned = sanitizeJsonControlChars(cleaned);
 
+  // Strategy 1: parse the string-aware sanitized text
+  const result1 = tryParseJson<T>(cleaned);
+  if (result1 !== null) return result1;
+
+  // Strategy 2: aggressive sanitization that doesn't rely on string tracking
+  // (handles cases where unescaped quotes in PDF text confuse boundary detection)
+  const aggressive = aggressiveSanitize(
+    text
+      .replace(/^```(?:json)?\s*\n?/i, "")
+      .replace(/\n?```\s*$/, "")
+      .trim()
+  );
+  const result2 = tryParseJson<T>(aggressive);
+  if (result2 !== null) return result2;
+
+  // Extract error context around the failure position for debugging
+  let context = "";
   try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    // Attempt to extract JSON from surrounding text
-    const jsonMatch = cleaned.match(/[\[{][\s\S]*[\]}]/);
-    if (jsonMatch) {
-      const extracted = jsonMatch[0].replace(/,\s*([}\]])/g, "$1");
-      try {
-        return JSON.parse(extracted);
-      } catch {
-        // fall through to truncation repair
-      }
+    JSON.parse(cleaned);
+  } catch (e2) {
+    const posMatch = (e2 as Error).message.match(/position (\d+)/);
+    if (posMatch) {
+      const pos = parseInt(posMatch[1]);
+      context = `\nContext: ...${cleaned.slice(Math.max(0, pos - 80), pos)}>>HERE>>${cleaned.slice(pos, pos + 80)}...`;
     }
-
-    // Attempt to repair truncated JSON by closing open brackets/braces
-    const repaired = repairTruncatedJson(cleaned);
-    if (repaired) {
-      try {
-        return JSON.parse(repaired);
-      } catch {
-        // give up
-      }
-    }
-
-    throw new Error(`Failed to parse Claude response as JSON: ${(e as Error).message}\nRaw: ${text.slice(0, 500)}`);
+    throw new Error(
+      `Failed to parse Claude response as JSON: ${(e2 as Error).message}${context}\nRaw: ${text.slice(0, 500)}`
+    );
   }
+
+  // Should not reach here, but satisfy TypeScript
+  throw new Error("Failed to parse Claude response as JSON");
 }
 
 /**
