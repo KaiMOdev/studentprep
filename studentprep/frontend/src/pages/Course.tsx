@@ -155,7 +155,7 @@ interface CourseData {
 }
 
 interface ProcessingProgress {
-  step: "extracting" | "detecting" | "processing_chapter" | "generating_questions" | "done" | "unknown";
+  step: "extracting" | "detecting" | "saving_chapters" | "done" | "unknown";
   currentChapter: number;
   totalChapters: number;
   chapterTitle: string;
@@ -175,8 +175,7 @@ const FALLBACK_MODELS: AIModelOption[] = [
 const STEPPER_STEPS = [
   { key: "extracting", label: "Extract" },
   { key: "detecting", label: "Detect" },
-  { key: "processing_chapter", label: "Summarize" },
-  { key: "generating_questions", label: "Questions" },
+  { key: "saving_chapters", label: "Outline" },
   { key: "done", label: "Done" },
 ] as const;
 
@@ -530,16 +529,14 @@ export default function Course() {
                     ? "Extracting text from PDF..."
                     : progress.step === "detecting"
                       ? "Detecting chapters..."
-                      : progress.step === "processing_chapter"
-                        ? `Saving chapter ${progress.currentChapter} of ${progress.totalChapters}`
-                        : progress.step === "generating_questions"
-                          ? `Generating questions for chapter ${progress.currentChapter} of ${progress.totalChapters}`
-                          : "Finishing up..."}
+                      : progress.step === "saving_chapters"
+                        ? `Outlining chapter ${progress.currentChapter} of ${progress.totalChapters}`
+                        : "Finishing up..."}
               </p>
             </div>
 
             {/* Chapter title */}
-            {(progress?.step === "processing_chapter" || progress?.step === "generating_questions") && progress.chapterTitle && (
+            {progress?.step === "saving_chapters" && progress.chapterTitle && (
               <p className="mb-4 text-center text-sm text-blue-600 truncate">
                 {progress.chapterTitle}
               </p>

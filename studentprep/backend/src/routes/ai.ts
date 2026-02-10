@@ -19,7 +19,7 @@ const cancelledCourses = new Set<string>();
 
 // Track processing progress per course
 interface ProcessingProgress {
-  step: "extracting" | "detecting" | "processing_chapter" | "generating_questions" | "done";
+  step: "extracting" | "detecting" | "saving_chapters" | "done";
   currentChapter: number;
   totalChapters: number;
   chapterTitle: string;
@@ -491,9 +491,15 @@ async function processCourse(
 
   const chapters = await detectChapters(fullText, model);
 
-  // 4. Insert chapters without summaries (summaries are generated on-demand per chapter)
+  // 4. Save chapters (summaries and questions are generated on-demand by the user)
+  processingProgress.set(courseId, {
+    step: "saving_chapters",
+    currentChapter: 0,
+    totalChapters: chapters.length,
+    chapterTitle: "",
+  });
+
   for (let i = 0; i < chapters.length; i++) {
-    // Check for cancellation between chapters
     if (cancelledCourses.has(courseId)) {
       console.log(`Processing cancelled for course ${courseId}`);
       cancelledCourses.delete(courseId);
@@ -504,14 +510,13 @@ async function processCourse(
     const ch = chapters[i];
 
     processingProgress.set(courseId, {
-      step: "processing_chapter",
+      step: "saving_chapters",
       currentChapter: i + 1,
       totalChapters: chapters.length,
       chapterTitle: ch.title,
     });
 
-    // Insert chapter with raw text only — no summary yet
-    const { data: insertedChapter } = await supabase
+    await supabase
       .from("chapters")
       .insert({
         course_id: courseId,
@@ -520,57 +525,7 @@ async function processCourse(
         summary_main: null,
         summary_side: null,
         sort_order: i,
-      })
-      .select("id")
-      .single();
-
-    // Generate questions for this chapter based on its content
-    if (insertedChapter) {
-      // Check for cancellation before generating questions
-      if (cancelledCourses.has(courseId)) {
-        console.log(`Processing cancelled for course ${courseId}`);
-        cancelledCourses.delete(courseId);
-        processingProgress.delete(courseId);
-        return;
-      }
-
-      processingProgress.set(courseId, {
-        step: "generating_questions",
-        currentChapter: i + 1,
-        totalChapters: chapters.length,
-        chapterTitle: ch.title,
       });
-
-      try {
-        const questions = await generateQuestions(ch.title, ch.content, undefined, model);
-
-        const examRows = questions.exam_questions.map((q) => ({
-          chapter_id: insertedChapter.id,
-          type: "exam",
-          question: q.question,
-          suggested_answer: q.suggested_answer,
-        }));
-
-        const discussionRows = questions.discussion_questions.map((q) => ({
-          chapter_id: insertedChapter.id,
-          type: "discussion",
-          question: q.question,
-          suggested_answer: q.why_useful,
-        }));
-
-        if (examRows.length > 0 || discussionRows.length > 0) {
-          const { error: insertError } = await supabase
-            .from("questions")
-            .insert([...examRows, ...discussionRows]);
-          if (insertError) {
-            console.error(`Failed to insert questions for chapter "${ch.title}":`, insertError.message);
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to generate questions for chapter "${ch.title}":`, err);
-        // Continue processing other chapters even if question generation fails for one
-      }
-    }
   }
 
   // 5. Mark course as ready
