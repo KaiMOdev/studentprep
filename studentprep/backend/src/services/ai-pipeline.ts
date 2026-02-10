@@ -54,9 +54,15 @@ export interface StudyPlanDay {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Escape literal control characters (newlines, tabs, etc.) that appear inside
- * JSON string values. Claude sometimes outputs raw newlines in JSON strings
- * when the source material (e.g. PDF text) contains them, which is invalid JSON.
+ * Escape literal control characters (newlines, tabs, etc.) AND unescaped
+ * double-quotes that appear inside JSON string values.
+ *
+ * Claude sometimes outputs raw newlines or unescaped quotes in JSON strings
+ * when the source material (e.g. PDF text) contains them, which is invalid
+ * JSON. To distinguish a real string-closing quote from an embedded one we
+ * use a look-ahead: after a `"` inside a string, the next non-whitespace
+ * character in valid JSON must be one of `,`, `}`, `]`, or `:`. If it isn't,
+ * the quote is treated as embedded content and escaped as `\"`.
  */
 function sanitizeJsonControlChars(text: string): string {
   let result = "";
@@ -79,8 +85,33 @@ function sanitizeJsonControlChars(text: string): string {
     }
 
     if (ch === '"') {
-      inString = !inString;
-      result += ch;
+      if (!inString) {
+        // Opening a new string
+        inString = true;
+        result += ch;
+        continue;
+      }
+
+      // Inside a string — decide if this quote closes it or is embedded.
+      // Peek ahead past any whitespace to find the next meaningful character.
+      let j = i + 1;
+      while (
+        j < text.length &&
+        (text[j] === " " || text[j] === "\t" ||
+         text[j] === "\n" || text[j] === "\r")
+      ) {
+        j++;
+      }
+      const next = j < text.length ? text[j] : "";
+
+      if (next === "," || next === "}" || next === "]" || next === ":" || next === "") {
+        // Looks like a real string terminator
+        inString = false;
+        result += ch;
+      } else {
+        // Embedded quote from content — escape it
+        result += '\\"';
+      }
       continue;
     }
 
