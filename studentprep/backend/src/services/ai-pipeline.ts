@@ -54,8 +54,58 @@ export interface StudyPlanDay {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Escape literal control characters (newlines, tabs, etc.) that appear inside
+ * JSON string values. Claude sometimes outputs raw newlines in JSON strings
+ * when the source material (e.g. PDF text) contains them, which is invalid JSON.
+ */
+function sanitizeJsonControlChars(text: string): string {
+  let result = "";
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      result += ch;
+      escape = false;
+      continue;
+    }
+
+    if (ch === "\\" && inString) {
+      result += ch;
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    if (inString) {
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        // Escape control characters that are invalid inside JSON strings
+        if (ch === "\n") { result += "\\n"; continue; }
+        if (ch === "\r") { result += "\\r"; continue; }
+        if (ch === "\t") { result += "\\t"; continue; }
+        result += `\\u${code.toString(16).padStart(4, "0")}`;
+        continue;
+      }
+    }
+
+    result += ch;
+  }
+
+  return result;
+}
+
+/**
  * Strip markdown code fences from Claude's response and parse JSON.
- * Now also handles partial fences and trailing commas.
+ * Handles partial fences, trailing commas, unescaped control characters,
+ * and truncated responses.
  */
 function parseJsonResponse<T>(text: string): T {
   let cleaned = text
@@ -65,6 +115,9 @@ function parseJsonResponse<T>(text: string): T {
 
   // Fix trailing commas before } or ] (common Claude mistake)
   cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
+
+  // Sanitize control characters inside JSON string values
+  cleaned = sanitizeJsonControlChars(cleaned);
 
   try {
     return JSON.parse(cleaned);
