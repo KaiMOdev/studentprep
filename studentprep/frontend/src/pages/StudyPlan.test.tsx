@@ -274,6 +274,48 @@ describe("StudyPlan", () => {
     });
   });
 
+  it("expands day row on click to show full text and quiz button", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ plans: [mockPlan] });
+    const user = userEvent.setup();
+    renderStudyPlan();
+
+    const introText = await screen.findByText("Introduction");
+
+    // Click the day row
+    await user.click(introText);
+
+    // Quiz button should appear
+    expect(screen.getByText(/Start quiz for/)).toBeInTheDocument();
+  });
+
+  it("collapses day row when clicked again", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ plans: [mockPlan] });
+    const user = userEvent.setup();
+    renderStudyPlan();
+
+    const introText = await screen.findByText("Introduction");
+
+    // Click to expand
+    await user.click(introText);
+    expect(screen.getByText(/Start quiz for/)).toBeInTheDocument();
+
+    // Click again to collapse
+    await user.click(introText);
+    expect(screen.queryByText(/Start quiz for/)).not.toBeInTheDocument();
+  });
+
+  it("navigates to quiz when quiz button is clicked", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ plans: [mockPlan] });
+    const user = userEvent.setup();
+    renderStudyPlan();
+
+    const introText = await screen.findByText("Introduction");
+    await user.click(introText);
+
+    await user.click(screen.getByText(/Start quiz for/));
+    expect(mockNavigate).toHaveBeenCalledWith("/quiz/course-1?chapters=ch1");
+  });
+
   it("shows error when loading plans fails", async () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error("Network error"));
     renderStudyPlan();

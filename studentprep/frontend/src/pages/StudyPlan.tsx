@@ -34,6 +34,7 @@ export default function StudyPlan() {
   const [hoursPerDay, setHoursPerDay] = useState(3);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
 
   const loadPlans = useCallback(async () => {
     try {
@@ -293,43 +294,68 @@ export default function StudyPlan() {
                   })}
                 </div>
 
-                {/* Schedule */}
+                {/* Schedule — click a day to expand & launch quiz */}
                 <div className="divide-y divide-gray-100">
                   {activePlan.plan.map((day, i) => {
                     const s = DAY_TYPE_STYLES[day.type] || DAY_TYPE_STYLES.buffer;
+                    const isSelected = selectedDayIndex === i;
+                    const hasChapters = day.chapters.length > 0;
                     return (
                       <div
                         key={i}
-                        className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50/50 transition"
+                        onClick={() => setSelectedDayIndex(isSelected ? null : i)}
+                        className={`cursor-pointer px-6 py-3 hover:bg-gray-50/50 transition ${isSelected ? "bg-indigo-50/40" : ""}`}
                       >
-                        <div className="w-24 shrink-0">
-                          <p className="text-sm font-medium">
-                            {new Date(day.date + "T12:00:00").toLocaleDateString("en-GB", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                            })}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${s.bg} ${s.text} ${s.ring}`}
-                        >
-                          {day.type === "study" ? "Study" : day.type === "review" ? "Review" : "Buffer"}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          {day.chapters.length > 0 ? (
-                            <p className="text-sm text-gray-700 truncate">
-                              {day.chapters.map((c) => c.title).join(", ")}
+                        <div className="flex items-center gap-4">
+                          <div className="w-24 shrink-0">
+                            <p className="text-sm font-medium">
+                              {new Date(day.date + "T12:00:00").toLocaleDateString("en-GB", {
+                                weekday: "short",
+                                day: "numeric",
+                                month: "short",
+                              })}
                             </p>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">
-                              {day.type === "buffer" ? "Catch-up or rest" : "Review material"}
-                            </p>
-                          )}
+                          </div>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${s.bg} ${s.text} ${s.ring}`}
+                          >
+                            {day.type === "study" ? "Study" : day.type === "review" ? "Review" : "Buffer"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            {hasChapters ? (
+                              <p className={`text-sm text-gray-700 ${isSelected ? "" : "truncate"}`}>
+                                {day.chapters.map((c) => c.title).join(", ")}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">
+                                {day.type === "buffer" ? "Catch-up or rest" : "Review material"}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 shrink-0">
+                            {formatTime(day.total_minutes)}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-500">
-                          {formatTime(day.total_minutes)}
-                        </span>
+                        {isSelected && hasChapters && (
+                          <div className="mt-3 ml-28">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const chapterIds = day.chapters.map((c) => c.id).join(",");
+                                navigate(`/quiz/${courseId}?chapters=${chapterIds}`);
+                              }}
+                              className="btn-press rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition shadow-sm"
+                            >
+                              Start quiz for{" "}
+                              {new Date(day.date + "T12:00:00").toLocaleDateString("en-GB", {
+                                weekday: "short",
+                                day: "numeric",
+                                month: "short",
+                              })}{" "}
+                              chapters
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
