@@ -781,7 +781,14 @@ export default function Course() {
                                   key={i}
                                   className="rounded-xl border-l-4 border-yellow-400 bg-yellow-50/80 p-4"
                                 >
-                                  <p className="font-medium">{topic.topic}</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => lookupWiki(chapter.id, topic.topic)}
+                                    title={`Look up "${topic.topic}" on Wikipedia`}
+                                    className="font-medium text-left hover:text-blue-700 hover:underline transition"
+                                  >
+                                    {topic.topic}
+                                  </button>
                                   <p className="mt-1 text-sm text-gray-700">
                                     {topic.explanation}
                                   </p>
@@ -793,6 +800,7 @@ export default function Course() {
                                           const tooltip = typeof term === "string" ? undefined : term.definition;
                                           return (
                                             <button
+                                              type="button"
                                               key={j}
                                               title={tooltip ? `${tooltip} (click for Wikipedia)` : "Click for Wikipedia"}
                                               onClick={() => lookupWiki(chapter.id, label)}
@@ -1011,6 +1019,7 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
         />
       </div>
       <button
+        type="button"
         onClick={() => setShowAnswer(!showAnswer)}
         className="mt-1 rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 transition"
       >
@@ -1071,6 +1080,7 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
         />
       </div>
       <button
+        type="button"
         onClick={() => setShowWhy(!showWhy)}
         className="mt-1 rounded-lg px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-100 transition"
       >
