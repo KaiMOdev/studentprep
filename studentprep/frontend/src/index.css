@@ -104,7 +104,7 @@
   }
 }
 .animate-fade-in-up {
-  animation: fadeInUp 0.3s ease-out forwards;
+  animation: fadeInUp 0.3s ease-out;
 }
 
 /* ── Subtle glow on focus ── */
