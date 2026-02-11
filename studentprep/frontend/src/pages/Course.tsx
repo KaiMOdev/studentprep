@@ -1055,6 +1055,8 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
     setShowWhy(!showWhy);
   };
 
+  console.log(`DiscussionQuestion ${index} rendered. showWhy=${showWhy}`);
+
   return (
     <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -1077,7 +1079,8 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
       </div>
       <button
         onClick={handleToggleWhy}
-        className="mt-1 text-sm font-medium text-purple-600 hover:underline"
+        className="mt-1 text-sm font-medium text-purple-600 hover:underline cursor-pointer relative z-10"
+        style={{ pointerEvents: 'auto' }}
       >
         {showWhy ? "Hide" : "Why ask this?"}
       </button>
