@@ -1050,6 +1050,11 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
   const displayQuestion = questionLang === "en" ? q.question : (qTranslations[questionLang] || q.question);
   const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
+  const handleToggleWhy = () => {
+    console.log("Why ask this? clicked. Current showWhy:", showWhy, "-> New:", !showWhy);
+    setShowWhy(!showWhy);
+  };
+
   return (
     <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -1071,7 +1076,7 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
         />
       </div>
       <button
-        onClick={() => setShowWhy(!showWhy)}
+        onClick={handleToggleWhy}
         className="mt-1 text-sm font-medium text-purple-600 hover:underline"
       >
         {showWhy ? "Hide" : "Why ask this?"}
