@@ -992,8 +992,8 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
 
   return (
     <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 p-4">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <p className="font-medium text-indigo-900">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <p className="min-w-0 font-medium text-indigo-900">
           {index}. {displayQuestion}
         </p>
         <TranslateButtons
@@ -1012,7 +1012,7 @@ function ExamQuestion({ index, q }: { index: number; q: Question }) {
       </div>
       <button
         onClick={() => setShowAnswer(!showAnswer)}
-        className="mt-1 text-sm font-medium text-indigo-600 hover:underline"
+        className="mt-1 rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 transition"
       >
         {showAnswer ? "Hide answer" : "Show suggested answer"}
       </button>
@@ -1050,17 +1050,10 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
   const displayQuestion = questionLang === "en" ? q.question : (qTranslations[questionLang] || q.question);
   const displayAnswer = answerLang === "en" ? q.suggested_answer : (aTranslations[answerLang] || q.suggested_answer);
 
-  const handleToggleWhy = () => {
-    console.log("Why ask this? clicked. Current showWhy:", showWhy, "-> New:", !showWhy);
-    setShowWhy(!showWhy);
-  };
-
-  console.log(`DiscussionQuestion ${index} rendered. showWhy=${showWhy}`);
-
   return (
     <div className="rounded-xl border border-purple-200 bg-purple-50/80 p-4">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <p className="font-medium text-purple-900">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <p className="min-w-0 font-medium text-purple-900">
           {index}. {displayQuestion}
         </p>
         <TranslateButtons
@@ -1078,9 +1071,8 @@ function DiscussionQuestion({ index, q }: { index: number; q: Question }) {
         />
       </div>
       <button
-        onClick={handleToggleWhy}
-        className="mt-1 text-sm font-medium text-purple-600 hover:underline cursor-pointer relative z-10"
-        style={{ pointerEvents: 'auto' }}
+        onClick={() => setShowWhy(!showWhy)}
+        className="mt-1 rounded-lg px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-100 transition"
       >
         {showWhy ? "Hide" : "Why ask this?"}
       </button>
