@@ -29,6 +29,10 @@ interface Chapter {
 interface Translations {
   nl?: string;
   fr?: string;
+  zh?: string;
+  hi?: string;
+  es?: string;
+  ar?: string;
 }
 
 interface Question {
@@ -41,12 +45,16 @@ interface Question {
   answer_translations?: Translations;
 }
 
-type Language = "en" | "nl" | "fr";
-type TranslateLang = "nl" | "fr";
+type Language = "en" | "nl" | "fr" | "zh" | "hi" | "es" | "ar";
+type TranslateLang = "nl" | "fr" | "zh" | "hi" | "es" | "ar";
 
-const TRANSLATE_OPTIONS: { lang: TranslateLang; label: string; flag: string }[] = [
-  { lang: "nl", label: "NL", flag: "\uD83C\uDDF3\uD83C\uDDF1" },
-  { lang: "fr", label: "FR", flag: "\uD83C\uDDEB\uD83C\uDDF7" },
+const TRANSLATE_OPTIONS: { lang: TranslateLang; flag: string }[] = [
+  { lang: "nl", flag: "\uD83C\uDDF3\uD83C\uDDF1" },
+  { lang: "fr", flag: "\uD83C\uDDEB\uD83C\uDDF7" },
+  { lang: "zh", flag: "\uD83C\uDDE8\uD83C\uDDF3" },
+  { lang: "hi", flag: "\uD83C\uDDEE\uD83C\uDDF3" },
+  { lang: "es", flag: "\uD83C\uDDEA\uD83C\uDDF8" },
+  { lang: "ar", flag: "\uD83C\uDDF8\uD83C\uDDE6" },
 ];
 
 function TranslateButtons({
@@ -111,28 +119,29 @@ function TranslateButtons({
     <div className="flex items-center gap-1">
       <button
         onClick={() => onTranslated("en", "")}
-        className={`rounded-l-md border px-2 py-0.5 text-xs font-medium transition ${
+        className={`rounded-l-md border px-2 py-0.5 text-sm transition ${
           activeLang === "en" ? colors.originalActive : colors.original
         }`}
+        title="English"
       >
-        Original
+        {"\uD83C\uDDEC\uD83C\uDDE7"}
       </button>
       {TRANSLATE_OPTIONS.map((opt) => (
         <button
           key={opt.lang}
           onClick={() => handleTranslate(opt.lang)}
           disabled={loading !== null}
-          className={`border px-2 py-0.5 text-xs font-medium transition last:rounded-r-md ${
+          className={`border px-2 py-0.5 text-sm transition last:rounded-r-md ${
             activeLang === opt.lang ? colors.active : colors.inactive
           } disabled:opacity-50`}
+          title={opt.lang.toUpperCase()}
         >
           {loading === opt.lang ? (
             <span className="inline-flex items-center gap-1">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              {opt.label}
             </span>
           ) : (
-            `${opt.flag} ${opt.label}`
+            opt.flag
           )}
         </button>
       ))}
