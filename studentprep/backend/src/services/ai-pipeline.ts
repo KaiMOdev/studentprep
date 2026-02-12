@@ -465,10 +465,10 @@ GUIDELINES:
 
 Chapter: "${chapterTitle}"
 ---
-${chapterText.slice(0, 30000)}
+${chapterText.slice(0, 60000)}
 ---`;
 
-  const response = await askClaude(system, prompt, 8192, model);
+  const response = await askClaude(system, prompt, 16384, model);
   return parseJsonResponse(response);
 }
 
@@ -540,10 +540,10 @@ RULES:
 
 Chapter: "${chapterTitle}"
 ---
-${chapterText.slice(0, 30000)}
+${chapterText.slice(0, 60000)}
 ---`;
 
-  const response = await askClaude(system, prompt, 8192, model);
+  const response = await askClaude(system, prompt, 16384, model);
   return parseJsonResponse(response);
 }
 
@@ -634,6 +634,6 @@ RULES:
 - The last 1-2 days should be review/practice, not new material.
 - IMPORTANT: "study" days (first encounter with new material) MUST introduce chapters in the chronological order listed above. Do NOT skip ahead or reorder chapters. Only "review" days may mix chapters from different parts of the course.`;
 
-  const response = await askClaude(system, prompt, 8192, model);
+  const response = await askClaude(system, prompt, 16384, model);
   return parseJsonResponse(response);
 }
