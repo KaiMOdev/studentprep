@@ -288,7 +288,7 @@ function fuzzyIndexOf(fullText: string, marker: string, fromIndex = 0): number {
   const window = fullText.slice(approxStart, approxEnd);
 
   // Try progressively shorter substrings of the marker
-  for (let len = marker.length; len >= 20; len -= 5) {
+  for (let len = marker.length; len >= 12; len -= 5) {
     const sub = normalizeWs(marker.slice(0, len));
     const subWords = sub.split(" ");
     // Build a regex that allows flexible whitespace
@@ -315,7 +315,9 @@ interface ChapterBoundary {
  * Improved: better prompt, fuzzy matching, validation.
  */
 export async function detectChapters(fullText: string, model: AIModel = DEFAULT_MODEL): Promise<ChapterData[]> {
-  const textPreview = fullText.slice(0, 80000);
+  // Send more text to Claude so it can see chapter start markers that appear later in the document.
+  // 120K chars ≈ 30-40K tokens which fits within the context window comfortably.
+  const textPreview = fullText.slice(0, 120000);
 
   const system = `You are a document structure analyzer. Your job is to identify chapter or section boundaries in academic/course text. You return ONLY raw JSON — no markdown fences, no explanation.`;
 
@@ -355,12 +357,31 @@ ${textPreview}
   // Split using fuzzy matching
   const chapters: ChapterData[] = [];
   const foundPositions: { idx: number; boundary: ChapterBoundary }[] = [];
+  const missedBoundaries: ChapterBoundary[] = [];
 
   for (const boundary of boundaries) {
     const idx = fuzzyIndexOf(fullText, boundary.start_text);
     if (idx !== -1) {
       foundPositions.push({ idx, boundary });
+    } else {
+      missedBoundaries.push(boundary);
     }
+  }
+
+  // Second pass: for missed boundaries, try matching just the title text
+  // (PDF extraction often garbles the body text but chapter titles are more reliable)
+  for (const boundary of missedBoundaries) {
+    const titleIdx = fuzzyIndexOf(fullText, boundary.title);
+    if (titleIdx !== -1) {
+      console.log(`[detectChapters] Recovered boundary via title match: "${boundary.title}"`);
+      foundPositions.push({ idx: titleIdx, boundary });
+    } else {
+      console.warn(`[detectChapters] Could not locate boundary in text: "${boundary.title}" (start_text: "${boundary.start_text.slice(0, 60)}...")`);
+    }
+  }
+
+  if (foundPositions.length === 0 && boundaries.length > 0) {
+    console.warn(`[detectChapters] All ${boundaries.length} boundaries failed fuzzy matching — falling back to full document. First boundary title: "${boundaries[0].title}", start_text: "${boundaries[0].start_text.slice(0, 80)}"`);
   }
 
   // Sort by position in text
@@ -385,6 +406,7 @@ ${textPreview}
     return [{ title: "Full Course", content: fullText }];
   }
 
+  console.log(`[detectChapters] Found ${chapters.length} chapters out of ${boundaries.length} boundaries detected by AI`);
   return chapters;
 }
 
