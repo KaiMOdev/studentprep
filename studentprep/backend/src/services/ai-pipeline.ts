@@ -315,23 +315,47 @@ interface ChapterBoundary {
  * Improved: better prompt, fuzzy matching, validation.
  */
 export async function detectChapters(fullText: string, model: AIModel = DEFAULT_MODEL): Promise<ChapterData[]> {
-  // Send more text to Claude so it can see chapter start markers that appear later in the document.
-  // 120K chars ≈ 30-40K tokens which fits within the context window comfortably.
-  const textPreview = fullText.slice(0, 120000);
+  // Build a text preview that lets Claude see chapter markers throughout the entire document.
+  // Primary block: first 200K chars covers TOC + early chapters.
+  // For longer documents, append periodic samples so Claude can see later chapter headings too.
+  const PRIMARY_LIMIT = 200000;
+  const SAMPLE_SIZE = 3000;     // chars per sample
+  const SAMPLE_GAP = 20000;     // sample every 20K chars in the remainder
+
+  let textPreview: string;
+  let truncationNote = "";
+
+  if (fullText.length <= PRIMARY_LIMIT) {
+    textPreview = fullText;
+  } else {
+    textPreview = fullText.slice(0, PRIMARY_LIMIT);
+
+    // Append samples from the rest of the document to capture later chapter headings
+    const samples: string[] = [];
+    for (let pos = PRIMARY_LIMIT; pos < fullText.length; pos += SAMPLE_GAP) {
+      samples.push(
+        `\n\n[... document text at character position ${pos} ...]\n\n` +
+        fullText.slice(pos, pos + SAMPLE_SIZE)
+      );
+    }
+    textPreview += samples.join("");
+
+    truncationNote = `\nIMPORTANT: The document text below is ${fullText.length.toLocaleString()} characters long. The first ${PRIMARY_LIMIT.toLocaleString()} characters are shown in full, followed by periodic samples from the rest of the document (marked with "[... document text at character position X ...]"). Use ALL available text — including samples from later sections — to identify every chapter. If you see a Table of Contents, use it to list ALL chapters even if their full content is not shown. For chapters whose content appears only in samples, copy the start_text EXACTLY from the sample text you can see.\n`;
+  }
 
   const system = `You are a document structure analyzer. Your job is to identify chapter or section boundaries in academic/course text. You return ONLY raw JSON — no markdown fences, no explanation.`;
 
   const prompt = `I have extracted text from a PDF course document. Identify where each chapter or major section starts, in the exact chronological order they appear in the document.
-
+${truncationNote}
 INSTRUCTIONS:
-1. FIRST check if the document has a Table of Contents (Inhoudstafel/Inhoud), Index, or outline at the beginning. If it does, use it as your primary guide to identify ALL content chapters and subchapters.
+1. FIRST check if the document has a Table of Contents (Inhoudstafel/Inhoud), Index, or outline at the beginning. If it does, use it as your primary guide to identify ALL content chapters and subchapters — even those whose full text may not be visible.
 2. Look for structural markers: numbered chapters, bold headings, "Chapter X", Roman numerals, section numbers (e.g. 1.1, 1.2, 2.1), or clear topic transitions.
 3. Include BOTH main chapters AND their subchapters/subsections (e.g. "Chapter 1", "1.1 Introduction", "1.2 Background", "Chapter 2", "2.1 Methods", etc.).
 4. For each entry, give me its title (EXACTLY as it appears in the text, including any numbering) and a verbatim snippet from the VERY BEGINNING of that section (the first 60-80 characters, copied exactly — I will use string matching to find the position).
-5. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation.
+5. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation. If you can see the chapter heading in the text (even in a later sample section), copy the text starting from that heading.
 6. If the document has no clear chapters, identify 3-8 major topic shifts.
 7. Maintain the EXACT chronological order as they appear in the document — do NOT reorder by importance.
-8. Maximum 40 entries. Cover ALL chapters and subchapters — completeness is critical.
+8. Maximum 40 entries. Cover ALL chapters and subchapters — completeness is critical. Do NOT stop early.
 9. SKIP non-content sections: do NOT include forewords (Voorwoord), prefaces, table of contents pages themselves, appendices (Bijlagen), bibliography/references (Literatuuroverzicht/Referenties/Bronnen), index pages, glossaries, acknowledgements, or colophon. Only include actual course/study content chapters.
 
 OUTPUT FORMAT (raw JSON array, no fences):
