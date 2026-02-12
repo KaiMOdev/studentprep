@@ -324,17 +324,18 @@ export async function detectChapters(fullText: string, model: AIModel = DEFAULT_
   const prompt = `I have extracted text from a PDF course document. Identify where each chapter or major section starts, in the exact chronological order they appear in the document.
 
 INSTRUCTIONS:
-1. FIRST check if the document has a Table of Contents, Index, or outline at the beginning. If it does, use it as a guide to ensure you capture ALL chapters AND subchapters listed there.
+1. FIRST check if the document has a Table of Contents (Inhoudstafel/Inhoud), Index, or outline at the beginning. If it does, use it as your primary guide to identify ALL content chapters and subchapters.
 2. Look for structural markers: numbered chapters, bold headings, "Chapter X", Roman numerals, section numbers (e.g. 1.1, 1.2, 2.1), or clear topic transitions.
 3. Include BOTH main chapters AND their subchapters/subsections (e.g. "Chapter 1", "1.1 Introduction", "1.2 Background", "Chapter 2", "2.1 Methods", etc.).
-4. For each entry, give me its title and a verbatim snippet from the VERY BEGINNING of that section (the first 60-80 characters, copied exactly — I will use string matching to find the position).
+4. For each entry, give me its title (EXACTLY as it appears in the text, including any numbering) and a verbatim snippet from the VERY BEGINNING of that section (the first 60-80 characters, copied exactly — I will use string matching to find the position).
 5. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation.
 6. If the document has no clear chapters, identify 3-8 major topic shifts.
 7. Maintain the EXACT chronological order as they appear in the document — do NOT reorder by importance.
 8. Maximum 40 entries. Cover ALL chapters and subchapters — completeness is critical.
+9. SKIP non-content sections: do NOT include forewords (Voorwoord), prefaces, table of contents pages themselves, appendices (Bijlagen), bibliography/references (Literatuuroverzicht/Referenties/Bronnen), index pages, glossaries, acknowledgements, or colophon. Only include actual course/study content chapters.
 
 OUTPUT FORMAT (raw JSON array, no fences):
-[{"title": "Descriptive chapter/section title", "start_text": "exact first 60-80 chars from the text"}]
+[{"title": "Chapter title exactly as in the text", "start_text": "exact first 60-80 chars from the text"}]
 
 EXAMPLES of good start_text values:
 - "Chapter 3: Database Normalization\\nNormalization is the proc"
