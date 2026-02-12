@@ -696,7 +696,7 @@ export default function Course() {
                       className="flex flex-1 items-center text-left"
                     >
                       <h3 className="text-lg font-semibold">
-                        {chapter.sort_order + 1}. {chapter.title}
+                        {chapter.title}
                       </h3>
                     </button>
                     <div className="flex items-center gap-2">
