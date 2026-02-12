@@ -348,7 +348,7 @@ TEXT:
 ${textPreview}
 ---`;
 
-  const response = await askClaude(system, prompt, 8192, model);
+  const response = await askClaude(system, prompt, 16384, model);
   const boundaries: ChapterBoundary[] = parseJsonResponse(response);
 
   if (!boundaries || boundaries.length === 0) {
