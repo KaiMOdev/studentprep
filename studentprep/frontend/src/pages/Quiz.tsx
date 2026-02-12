@@ -32,33 +32,61 @@ export default function Quiz() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [score, setScore] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+
+  const loadQuiz = async () => {
+    if (!courseId || !chapters) return;
+    const chapterIds = chapters.split(",");
+    try {
+      const data = await apiFetch<{
+        session_id: string;
+        questions: QuizQuestion[];
+        includes_review: boolean;
+      }>("/api/quiz/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chapterIds, courseId }),
+      });
+      setSessionId(data.session_id);
+      setQuestions(data.questions);
+      setIncludesReview(data.includes_review);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate quiz");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!courseId || !chapters) {
       setLoading(false);
       return;
     }
-
-    const chapterIds = chapters.split(",");
-    apiFetch<{
-      session_id: string;
-      questions: QuizQuestion[];
-      includes_review: boolean;
-    }>("/api/quiz/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chapterIds, courseId }),
-    })
-      .then((data) => {
-        setSessionId(data.session_id);
-        setQuestions(data.questions);
-        setIncludesReview(data.includes_review);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to generate quiz");
-      })
-      .finally(() => setLoading(false));
+    loadQuiz();
   }, [courseId, chapters]);
+
+  const handleGenerateQuestions = async () => {
+    if (!chapters) return;
+    setGenerating(true);
+    setGenerateError("");
+    try {
+      const chapterIds = chapters.split(",");
+      await Promise.all(
+        chapterIds.map((id) =>
+          apiFetch(`/api/ai/questions/${id}`, { method: "POST" })
+        )
+      );
+      // Reload the quiz after generating questions
+      await loadQuiz();
+    } catch (err) {
+      setGenerateError(
+        err instanceof Error ? err.message : "Failed to generate questions"
+      );
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleShowAnswer = () => {
     setShowAnswer(true);
@@ -142,11 +170,36 @@ export default function Quiz() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50/50">
         <p className="text-gray-600">No questions available for the selected chapters</p>
         <button
-          onClick={() => navigate(`/course/${courseId}`)}
-          className="btn-press rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition"
+          onClick={handleGenerateQuestions}
+          disabled={generating}
+          className="btn-press rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-50"
         >
-          Back to course
+          {generating ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              Generating...
+            </span>
+          ) : (
+            "Generate Questions"
+          )}
         </button>
+        {generateError && (
+          <p className="text-sm text-red-600">{generateError}</p>
+        )}
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate(`/course/${courseId}`)}
+            className="btn-press rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+          >
+            Back to course
+          </button>
+          <button
+            onClick={() => navigate(`/study-plan/${courseId}`)}
+            className="btn-press rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+          >
+            Back to study plan
+          </button>
+        </div>
       </div>
     );
   }
