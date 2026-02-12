@@ -306,15 +306,15 @@ aiRoutes.post("/translate", async (c) => {
   const { questionId, field, targetLang } = body as {
     questionId: string;
     field: "question" | "answer";
-    targetLang: "nl" | "fr";
+    targetLang: "nl" | "fr" | "zh" | "hi" | "es" | "ar";
   };
 
   if (!questionId || !field || !targetLang) {
     return c.json({ error: "questionId, field, and targetLang are required" }, 400);
   }
 
-  if (!["nl", "fr"].includes(targetLang)) {
-    return c.json({ error: "targetLang must be 'nl' or 'fr'" }, 400);
+  if (!["nl", "fr", "zh", "hi", "es", "ar"].includes(targetLang)) {
+    return c.json({ error: "targetLang must be one of: nl, fr, zh, hi, es, ar" }, 400);
   }
 
   if (!["question", "answer"].includes(field)) {

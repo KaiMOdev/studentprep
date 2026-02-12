@@ -577,6 +577,10 @@ const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
   nl: "Dutch",
   fr: "French",
+  zh: "Mandarin Chinese",
+  hi: "Hindi",
+  es: "Spanish",
+  ar: "Arabic",
 };
 
 /**
@@ -585,7 +589,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
  */
 export async function translateText(
   text: string,
-  targetLang: "en" | "nl" | "fr"
+  targetLang: "en" | "nl" | "fr" | "zh" | "hi" | "es" | "ar"
 ): Promise<string> {
   const langName = LANGUAGE_NAMES[targetLang] || targetLang;
 
