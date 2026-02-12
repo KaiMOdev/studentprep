@@ -119,7 +119,7 @@ function TranslateButtons({
     <div className="flex items-center gap-1">
       <button
         onClick={() => onTranslated("en", "")}
-        className={`rounded-l-md border px-2 py-0.5 text-sm transition ${
+        className={`inline-flex items-center justify-center rounded-l-md border px-2.5 py-1.5 text-base leading-none transition ${
           activeLang === "en" ? colors.originalActive : colors.original
         }`}
         title="English"
@@ -131,15 +131,13 @@ function TranslateButtons({
           key={opt.lang}
           onClick={() => handleTranslate(opt.lang)}
           disabled={loading !== null}
-          className={`border px-2 py-0.5 text-sm transition last:rounded-r-md ${
+          className={`inline-flex items-center justify-center border px-2.5 py-1.5 text-base leading-none transition last:rounded-r-md ${
             activeLang === opt.lang ? colors.active : colors.inactive
           } disabled:opacity-50`}
           title={opt.lang.toUpperCase()}
         >
           {loading === opt.lang ? (
-            <span className="inline-flex items-center gap-1">
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            </span>
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
           ) : (
             opt.flag
           )}
