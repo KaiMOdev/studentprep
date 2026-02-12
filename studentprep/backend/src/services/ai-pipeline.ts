@@ -319,22 +319,26 @@ export async function detectChapters(fullText: string, model: AIModel = DEFAULT_
 
   const system = `You are a document structure analyzer. Your job is to identify chapter or section boundaries in academic/course text. You return ONLY raw JSON — no markdown fences, no explanation.`;
 
-  const prompt = `I have extracted text from a PDF course document. Identify where each chapter or major section starts.
+  const prompt = `I have extracted text from a PDF course document. Identify where each chapter or major section starts, in the exact chronological order they appear in the document.
 
 INSTRUCTIONS:
-1. Look for structural markers: numbered chapters, bold headings, "Chapter X", Roman numerals, or clear topic transitions.
-2. For each chapter, give me its title and a verbatim snippet from the VERY BEGINNING of that chapter (the first 60-80 characters, copied exactly — I will use string matching to find the position).
-3. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation.
-4. If the document has no clear chapters, identify 3-8 major topic shifts.
-5. Maximum 20 entries.
+1. FIRST check if the document has a Table of Contents, Index, or outline at the beginning. If it does, use it as a guide to ensure you capture ALL chapters AND subchapters listed there.
+2. Look for structural markers: numbered chapters, bold headings, "Chapter X", Roman numerals, section numbers (e.g. 1.1, 1.2, 2.1), or clear topic transitions.
+3. Include BOTH main chapters AND their subchapters/subsections (e.g. "Chapter 1", "1.1 Introduction", "1.2 Background", "Chapter 2", "2.1 Methods", etc.).
+4. For each entry, give me its title and a verbatim snippet from the VERY BEGINNING of that section (the first 60-80 characters, copied exactly — I will use string matching to find the position).
+5. The start_text must be EXACTLY as it appears in the text, including any numbering, whitespace, or punctuation.
+6. If the document has no clear chapters, identify 3-8 major topic shifts.
+7. Maintain the EXACT chronological order as they appear in the document — do NOT reorder by importance.
+8. Maximum 40 entries. Cover ALL chapters and subchapters — completeness is critical.
 
 OUTPUT FORMAT (raw JSON array, no fences):
-[{"title": "Descriptive chapter title", "start_text": "exact first 60-80 chars from the text"}]
+[{"title": "Descriptive chapter/section title", "start_text": "exact first 60-80 chars from the text"}]
 
 EXAMPLES of good start_text values:
 - "Chapter 3: Database Normalization\\nNormalization is the proc"
 - "3.1 Introduction to Machine Learning\\n\\nMachine learning is"
 - "PART II: ADVANCED TOPICS\\n\\nIn this section we explore"
+- "2.3.1 Gradient Descent\\n\\nGradient descent is an optimizati"
 
 TEXT:
 ---
@@ -403,6 +407,8 @@ INSTRUCTIONS:
 - Respond in the SAME LANGUAGE as the chapter text below.
 - Base your summary EXCLUSIVELY on the content provided — no external knowledge.
 - Ignore metadata (author, publisher, ISBN, etc.).
+- CRITICAL: List topics in CHRONOLOGICAL ORDER as they appear in the chapter text. Do NOT reorder by importance — preserve the author's original sequence.
+- Cover ALL topics and subtopics discussed in the chapter. Do not skip any section or subsection.
 
 PRODUCE THIS STRUCTURE:
 {
@@ -425,12 +431,14 @@ PRODUCE THIS STRUCTURE:
 }
 
 GUIDELINES:
+- CHRONOLOGICAL ORDER: Topics must follow the exact order they appear in the source text. The first topic in the chapter should be the first in main_topics, and so on.
 - Mark topics "critical" if a student would fail the exam without knowing them.
 - Mark topics "important" if they're likely exam material but not make-or-break.
 - Mark topics "supporting" if they provide context or depth.
 - Key terms should include definitions AS USED IN THIS COURSE (not generic dictionary definitions).
 - Prerequisites help students identify gaps before studying this chapter.
 - Connections help students see the bigger picture.
+- COMPLETENESS: Ensure every major concept, subsection, and subtopic in the chapter is represented. Missing a topic means a student might miss it during study.
 
 Chapter: "${chapterTitle}"
 ---
@@ -571,10 +579,10 @@ PARAMETERS:
 ${chapters.map((ch, i) => `  ${i + 1}. "${ch.title}" (id: "${ch.id}")${ch.importance ? ` [${ch.importance}]` : ""}`).join("\n")}
 
 STUDY SCIENCE PRINCIPLES TO APPLY:
-1. SPACED REPETITION: Review material at increasing intervals (1 day, 3 days, 7 days).
-2. INTERLEAVING: Mix chapters on review days rather than blocking.
-3. ACTIVE RECALL: Include "practice" days where the student tests themselves.
-4. PROGRESSIVE LOAD: Start with the most critical/foundational chapters.
+1. CHRONOLOGICAL ORDER: Study new chapters in the exact order they are listed above (chapter 1 first, then chapter 2, etc.). This follows the course structure and ensures prerequisites are covered before dependent material.
+2. SPACED REPETITION: Review previously studied material at increasing intervals (1 day, 3 days, 7 days). Review days may mix chapters from different parts of the course — this is the ONLY exception to chronological ordering.
+3. INTERLEAVING: Mix chapters on review days rather than blocking.
+4. ACTIVE RECALL: Include "practice" days where the student tests themselves.
 5. BUFFER: Leave a buffer day before the exam for rest and light review.
 
 DAY TYPES:
@@ -600,7 +608,8 @@ RULES:
 - Don't schedule on the exam day itself.
 - Be realistic: max ${hoursPerDay * 60} minutes per day.
 - Every chapter should be studied at least once and reviewed at least once.
-- The last 1-2 days should be review/practice, not new material.`;
+- The last 1-2 days should be review/practice, not new material.
+- IMPORTANT: "study" days (first encounter with new material) MUST introduce chapters in the chronological order listed above. Do NOT skip ahead or reorder chapters. Only "review" days may mix chapters from different parts of the course.`;
 
   const response = await askClaude(system, prompt, 8192, model);
   return parseJsonResponse(response);
