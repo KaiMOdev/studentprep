@@ -3,6 +3,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { getSupabaseAdmin } from "../services/supabase.js";
 import { validateConfig } from "../services/config.js";
+import { getAllUsersMonthlyCosts } from "../services/subscription.js";
+import { saveUserApiKey, getUserApiKeyHint, deleteUserApiKey } from "../services/api-keys.js";
 import type { AuthEnv } from "../types.js";
 
 export const adminRoutes = new Hono<AuthEnv>();
@@ -202,6 +204,104 @@ adminRoutes.get("/config", async (c) => {
       adminEmails: (process.env.ADMIN_EMAILS || "").split(",").filter(Boolean).length,
     },
   });
+});
+
+// GET /api/admin/costs — Monthly cost overview per user
+adminRoutes.get("/costs", async (c) => {
+  const url = new URL(c.req.url);
+  const now = new Date();
+  const year = parseInt(url.searchParams.get("year") || String(now.getFullYear()));
+  const month = parseInt(url.searchParams.get("month") || String(now.getMonth() + 1));
+
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    return c.json({ error: "Invalid year or month" }, 400);
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  // Get costs
+  const costs = await getAllUsersMonthlyCosts(year, month);
+
+  // Enrich with user emails
+  const { data: usersData } = await supabase.auth.admin.listUsers({
+    perPage: 100,
+    page: 1,
+  });
+  const emailMap: Record<string, string> = {};
+  for (const u of usersData?.users || []) {
+    emailMap[u.id] = u.email || "unknown";
+  }
+
+  // Get API key status for each user
+  let apiKeyUsers: string[] = [];
+  try {
+    const { data: keyRows } = await supabase
+      .from("user_api_keys")
+      .select("user_id");
+    apiKeyUsers = (keyRows || []).map((r: any) => r.user_id);
+  } catch {
+    // table may not exist
+  }
+
+  const enrichedCosts = costs.map((c) => ({
+    ...c,
+    email: emailMap[c.userId] || "unknown",
+    hasApiKey: apiKeyUsers.includes(c.userId),
+  }));
+
+  // Calculate totals
+  const totalCost = costs.reduce((sum, c) => sum + c.estimatedCostUsd, 0);
+  const totalInputTokens = costs.reduce((sum, c) => sum + c.inputTokens, 0);
+  const totalOutputTokens = costs.reduce((sum, c) => sum + c.outputTokens, 0);
+
+  return c.json({
+    year,
+    month,
+    totalCostUsd: totalCost,
+    totalInputTokens,
+    totalOutputTokens,
+    users: enrichedCosts,
+  });
+});
+
+// --- User API key management (auth required, not admin) ---
+
+export const apiKeyRoutes = new Hono<AuthEnv>();
+apiKeyRoutes.use("*", requireAuth);
+
+// GET /api/api-keys — Get current API key status
+apiKeyRoutes.get("/", async (c) => {
+  const userId = c.get("userId");
+  const hint = await getUserApiKeyHint(userId);
+  return c.json({ hasKey: !!hint, hint });
+});
+
+// POST /api/api-keys — Save or update API key
+apiKeyRoutes.post("/", async (c) => {
+  const userId = c.get("userId");
+  const { apiKey } = await c.req.json<{ apiKey: string }>();
+
+  if (!apiKey || typeof apiKey !== "string" || apiKey.length < 10) {
+    return c.json({ error: "Invalid API key" }, 400);
+  }
+
+  try {
+    const { hint } = await saveUserApiKey(userId, apiKey);
+    return c.json({ success: true, hint });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Failed to save API key" }, 500);
+  }
+});
+
+// DELETE /api/api-keys — Remove stored API key
+apiKeyRoutes.delete("/", async (c) => {
+  const userId = c.get("userId");
+  try {
+    await deleteUserApiKey(userId);
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Failed to delete API key" }, 500);
+  }
 });
 
 // --- Separate route for /api/auth/me (no admin required, just auth) ---
