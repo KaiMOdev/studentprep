@@ -177,7 +177,6 @@ interface AIModelOption {
 
 const FALLBACK_MODELS: AIModelOption[] = [
   { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
-  { id: "claude-opus-4-6", label: "Opus 4.6" },
 ];
 
 /* ── Processing stepper config ── */

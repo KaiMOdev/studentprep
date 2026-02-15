@@ -24,11 +24,10 @@ function getClient(): Anthropic {
   return client;
 }
 
-export type AIModel = "claude-sonnet-4-5-20250929" | "claude-opus-4-6";
+export type AIModel = "claude-sonnet-4-5-20250929" | "claude-haiku-4-5-20251001";
 
 export const AI_MODELS: { id: AIModel; label: string }[] = [
   { id: "claude-sonnet-4-5-20250929", label: "Sonnet 4.5" },
-  { id: "claude-opus-4-6", label: "Opus 4.6" },
 ];
 
 export const DEFAULT_MODEL: AIModel = "claude-sonnet-4-5-20250929";
