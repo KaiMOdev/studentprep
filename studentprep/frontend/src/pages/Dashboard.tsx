@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, apiUpload } from "../lib/api";
+import { useSubscriptionContext } from "../contexts/SubscriptionContext";
+import { PlanBadge, TokenUsageMeter } from "../components/UpgradePrompt";
 
 interface StudyPlanSummary {
   id: string;
@@ -66,6 +68,7 @@ function courseEmoji(filename: string) {
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { subscription } = useSubscriptionContext();
   const [courses, setCourses] = useState<Course[]>([]);
   const [plansByCourse, setPlansByCourse] = useState<
     Record<string, StudyPlanSummary[]>
@@ -185,6 +188,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 Admin Settings
               </button>
             )}
+            {/* Plan badge */}
+            {subscription && <PlanBadge plan={subscription.plan} />}
             {/* Avatar menu */}
             <div className="flex items-center gap-2">
               <div className="avatar-gradient flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white">
@@ -206,6 +211,27 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
       {/* Content */}
       <main className="mx-auto max-w-5xl px-6 py-8">
+        {/* Token usage meter */}
+        {subscription && (
+          <div className="mb-6 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">AI Token Usage This Month</span>
+              {subscription.plan === "free" && (
+                <button
+                  onClick={() => alert("Pro upgrade coming soon! Contact us for early access.")}
+                  className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition"
+                >
+                  Upgrade for unlimited
+                </button>
+              )}
+            </div>
+            <TokenUsageMeter
+              used={subscription.usage.tokensThisMonth}
+              max={subscription.limits.maxTokensPerMonth}
+            />
+          </div>
+        )}
+
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">My courses</h2>

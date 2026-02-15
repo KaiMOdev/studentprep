@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { apiFetch } from "./lib/api";
+import { SubscriptionProvider } from "./contexts/SubscriptionContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Course from "./pages/Course";
@@ -32,32 +33,31 @@ export default function App() {
     );
   }
 
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    );
+  }
+
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={user ? <Navigate to="/dashboard" /> : <Landing />}
-      />
-      <Route
-        path="/dashboard"
-        element={user ? <Dashboard isAdmin={isAdmin} /> : <Navigate to="/" />}
-      />
-      <Route
-        path="/course/:id"
-        element={user ? <Course /> : <Navigate to="/" />}
-      />
-      <Route
-        path="/study-plan/:courseId"
-        element={user ? <StudyPlan /> : <Navigate to="/" />}
-      />
-      <Route
-        path="/quiz/:courseId"
-        element={user ? <Quiz /> : <Navigate to="/" />}
-      />
-      <Route
-        path="/admin/settings"
-        element={user && isAdmin ? <AdminSettings /> : <Navigate to="/" />}
-      />
-    </Routes>
+    <SubscriptionProvider>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+        <Route
+          path="/dashboard"
+          element={<Dashboard isAdmin={isAdmin} />}
+        />
+        <Route path="/course/:id" element={<Course />} />
+        <Route path="/study-plan/:courseId" element={<StudyPlan />} />
+        <Route path="/quiz/:courseId" element={<Quiz />} />
+        <Route
+          path="/admin/settings"
+          element={isAdmin ? <AdminSettings /> : <Navigate to="/" />}
+        />
+      </Routes>
+    </SubscriptionProvider>
   );
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiFetch } from "../lib/api";
+import { apiFetch, UpgradeRequiredError } from "../lib/api";
+import { UpgradePrompt } from "../components/UpgradePrompt";
+import { useSubscriptionContext } from "../contexts/SubscriptionContext";
 
 interface PlanDay {
   date: string;
@@ -25,10 +27,12 @@ const DAY_TYPE_STYLES: Record<string, { bg: string; text: string; ring: string; 
 export default function StudyPlan() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+  const { refresh: refreshSubscription } = useSubscriptionContext();
   const [plans, setPlans] = useState<StudyPlan[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [examDate, setExamDate] = useState("");
   const [hoursPerDay, setHoursPerDay] = useState(3);
@@ -70,9 +74,14 @@ export default function StudyPlan() {
       setShowForm(false);
       await loadPlans();
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : "Failed to generate plan");
+      if (err instanceof UpgradeRequiredError) {
+        setUpgradeError(err.message);
+      } else {
+        setGenerateError(err instanceof Error ? err.message : "Failed to generate plan");
+      }
     } finally {
       setGenerating(false);
+      refreshSubscription();
     }
   };
 
@@ -103,9 +112,14 @@ export default function StudyPlan() {
       });
       await loadPlans();
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : "Failed to regenerate plan");
+      if (err instanceof UpgradeRequiredError) {
+        setUpgradeError(err.message);
+      } else {
+        setGenerateError(err instanceof Error ? err.message : "Failed to regenerate plan");
+      }
     } finally {
       setGenerating(false);
+      refreshSubscription();
     }
   };
 
@@ -196,6 +210,11 @@ export default function StudyPlan() {
                 />
               </div>
             </div>
+            {upgradeError && (
+              <div className="mt-3">
+                <UpgradePrompt description={upgradeError} compact />
+              </div>
+            )}
             {generateError && (
               <p className="mt-3 text-sm text-red-600">{generateError}</p>
             )}

@@ -2,6 +2,16 @@ import { supabase } from "./supabase";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
+export class UpgradeRequiredError extends Error {
+  code = "UPGRADE_REQUIRED" as const;
+  limit: string;
+  constructor(message: string, limit: string) {
+    super(message);
+    this.name = "UpgradeRequiredError";
+    this.limit = limit;
+  }
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const {
     data: { session },
@@ -32,6 +42,9 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 403 && body.code === "UPGRADE_REQUIRED") {
+      throw new UpgradeRequiredError(body.error || "Upgrade required", body.limit || "unknown");
+    }
     throw new Error(body.error || `API error: ${res.status}`);
   }
 

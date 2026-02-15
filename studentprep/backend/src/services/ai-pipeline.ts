@@ -1,4 +1,6 @@
-import { askClaude, type AIModel, DEFAULT_MODEL } from "./claude.js";
+import { askClaudeWithUsage, type AIModel, type ClaudeUsage, DEFAULT_MODEL } from "./claude.js";
+
+export type UsageCallback = (usage: ClaudeUsage) => void;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -314,7 +316,7 @@ interface ChapterBoundary {
  * Split raw PDF text into chapters using Claude.
  * Improved: better prompt, fuzzy matching, validation.
  */
-export async function detectChapters(fullText: string, model: AIModel = DEFAULT_MODEL): Promise<ChapterData[]> {
+export async function detectChapters(fullText: string, model: AIModel = DEFAULT_MODEL, onUsage?: UsageCallback): Promise<ChapterData[]> {
   // Build a text preview that lets Claude see chapter markers throughout the entire document.
   // Primary block: first 200K chars covers TOC + early chapters.
   // For longer documents, append periodic samples so Claude can see later chapter headings too.
@@ -372,8 +374,9 @@ TEXT:
 ${textPreview}
 ---`;
 
-  const response = await askClaude(system, prompt, 16384, model);
-  const boundaries: ChapterBoundary[] = parseJsonResponse(response);
+  const result = await askClaudeWithUsage(system, prompt, 16384, model);
+  onUsage?.(result.usage);
+  const boundaries: ChapterBoundary[] = parseJsonResponse(result.text);
 
   if (!boundaries || boundaries.length === 0) {
     return [{ title: "Full Course", content: fullText }];
@@ -444,7 +447,8 @@ ${textPreview}
 export async function summarizeChapter(
   chapterTitle: string,
   chapterText: string,
-  _model?: AIModel
+  _model?: AIModel,
+  onUsage?: UsageCallback
 ): Promise<ChapterSummary> {
   const system = `You are an expert academic tutor creating study materials. You produce structured summaries that help students prepare for university exams. Respond in the SAME LANGUAGE as the source material. Return ONLY raw JSON — no markdown fences, no commentary.`;
 
@@ -494,8 +498,9 @@ ${chapterText.slice(0, 60000)}
 ---`;
 
   const SUMMARY_MODEL: AIModel = "claude-sonnet-4-5-20250929";
-  const response = await askClaude(system, prompt, 16384, SUMMARY_MODEL);
-  return parseJsonResponse(response);
+  const result = await askClaudeWithUsage(system, prompt, 16384, SUMMARY_MODEL);
+  onUsage?.(result.usage);
+  return parseJsonResponse(result.text);
 }
 
 // ─── Question Generation ─────────────────────────────────────────────────────
@@ -508,7 +513,8 @@ export async function generateQuestions(
   chapterTitle: string,
   chapterText: string,
   summary?: ChapterSummary,
-  _model?: AIModel
+  _model?: AIModel,
+  onUsage?: UsageCallback
 ): Promise<GeneratedQuestions> {
   const summaryContext = summary
     ? `\nKEY TOPICS IDENTIFIED:\n${summary.main_topics.map((t) => `- [${t.importance}] ${t.topic}`).join("\n")}\n`
@@ -570,8 +576,9 @@ ${chapterText.slice(0, 60000)}
 ---`;
 
   const QUIZ_MODEL: AIModel = "claude-haiku-4-5-20251001";
-  const response = await askClaude(system, prompt, 16384, QUIZ_MODEL);
-  return parseJsonResponse(response);
+  const result = await askClaudeWithUsage(system, prompt, 16384, QUIZ_MODEL);
+  onUsage?.(result.usage);
+  return parseJsonResponse(result.text);
 }
 
 // ─── On-demand Translation ──────────────────────────────────────────────────
@@ -592,7 +599,8 @@ const LANGUAGE_NAMES: Record<string, string> = {
  */
 export async function translateText(
   text: string,
-  targetLang: "en" | "nl" | "fr" | "zh" | "hi" | "es" | "ar"
+  targetLang: "en" | "nl" | "fr" | "zh" | "hi" | "es" | "ar",
+  onUsage?: UsageCallback
 ): Promise<string> {
   const langName = LANGUAGE_NAMES[targetLang] || targetLang;
 
@@ -601,7 +609,9 @@ export async function translateText(
   const prompt = `Translate the following text into ${langName}:\n\n${text}`;
 
   const TRANSLATION_MODEL: AIModel = "claude-haiku-4-5-20251001";
-  return await askClaude(system, prompt, 4096, TRANSLATION_MODEL);
+  const result = await askClaudeWithUsage(system, prompt, 4096, TRANSLATION_MODEL);
+  onUsage?.(result.usage);
+  return result.text;
 }
 
 // ─── Study Plan ──────────────────────────────────────────────────────────────
@@ -613,7 +623,8 @@ export async function generateStudyPlan(
   chapters: { id: string; title: string; importance?: string }[],
   examDate: string,
   hoursPerDay: number,
-  model: AIModel = DEFAULT_MODEL
+  model: AIModel = DEFAULT_MODEL,
+  onUsage?: UsageCallback
 ): Promise<StudyPlanDay[]> {
   const today = new Date().toISOString().split("T")[0];
   const examD = new Date(examDate);
@@ -665,6 +676,7 @@ RULES:
 - The last 1-2 days should be review/practice, not new material.
 - IMPORTANT: "study" days (first encounter with new material) MUST introduce chapters in the chronological order listed above. Do NOT skip ahead or reorder chapters. Only "review" days may mix chapters from different parts of the course.`;
 
-  const response = await askClaude(system, prompt, 16384, model);
-  return parseJsonResponse(response);
+  const result = await askClaudeWithUsage(system, prompt, 16384, model);
+  onUsage?.(result.usage);
+  return parseJsonResponse(result.text);
 }
