@@ -444,7 +444,7 @@ ${textPreview}
 export async function summarizeChapter(
   chapterTitle: string,
   chapterText: string,
-  model: AIModel = DEFAULT_MODEL
+  _model?: AIModel
 ): Promise<ChapterSummary> {
   const system = `You are an expert academic tutor creating study materials. You produce structured summaries that help students prepare for university exams. Respond in the SAME LANGUAGE as the source material. Return ONLY raw JSON — no markdown fences, no commentary.`;
 
@@ -463,7 +463,7 @@ PRODUCE THIS STRUCTURE:
   "main_topics": [
     {
       "topic": "Topic name",
-      "explanation": "Clear 2-4 sentence explanation a student can study from. Include the WHY, not just the WHAT.",
+      "explanation": "Detailed 4-8 sentence explanation a student can study from. Include the WHY, not just the WHAT. Elaborate on mechanisms, causes, consequences, and relationships between concepts. Provide enough depth that a student could use this as a standalone study resource.",
       "key_terms": [
         {"term": "Technical term", "definition": "Concise definition as used in this course"}
       ],
@@ -471,7 +471,7 @@ PRODUCE THIS STRUCTURE:
     }
   ],
   "side_topics": [
-    {"topic": "Supporting topic", "explanation": "Brief explanation of why it matters in context"}
+    {"topic": "Supporting topic", "explanation": "2-4 sentence explanation of why it matters in context and how it relates to the main material"}
   ],
   "prerequisites": ["concepts a student should already know before reading this chapter"],
   "connections": ["how this chapter relates to broader themes or other possible chapters"]
@@ -486,13 +486,15 @@ GUIDELINES:
 - Prerequisites help students identify gaps before studying this chapter.
 - Connections help students see the bigger picture.
 - COMPLETENESS: Ensure every major concept, subsection, and subtopic in the chapter is represented. Missing a topic means a student might miss it during study.
+- DEPTH: Write thorough, detailed explanations. Each main topic explanation should be 4-8 sentences covering the core idea, its significance, how it works, and how it connects to other topics. Aim for roughly 150 words more per summary than a minimal version would have.
 
 Chapter: "${chapterTitle}"
 ---
 ${chapterText.slice(0, 60000)}
 ---`;
 
-  const response = await askClaude(system, prompt, 16384, model);
+  const SUMMARY_MODEL: AIModel = "claude-sonnet-4-5-20250929";
+  const response = await askClaude(system, prompt, 16384, SUMMARY_MODEL);
   return parseJsonResponse(response);
 }
 
@@ -506,7 +508,7 @@ export async function generateQuestions(
   chapterTitle: string,
   chapterText: string,
   summary?: ChapterSummary,
-  model: AIModel = DEFAULT_MODEL
+  _model?: AIModel
 ): Promise<GeneratedQuestions> {
   const summaryContext = summary
     ? `\nKEY TOPICS IDENTIFIED:\n${summary.main_topics.map((t) => `- [${t.importance}] ${t.topic}`).join("\n")}\n`
@@ -567,7 +569,8 @@ Chapter: "${chapterTitle}"
 ${chapterText.slice(0, 60000)}
 ---`;
 
-  const response = await askClaude(system, prompt, 16384, model);
+  const QUIZ_MODEL: AIModel = "claude-haiku-4-5-20251001";
+  const response = await askClaude(system, prompt, 16384, QUIZ_MODEL);
   return parseJsonResponse(response);
 }
 
@@ -585,7 +588,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 
 /**
  * Translate a single text to a target language.
- * Uses Sonnet 4.5 for fast, cheap translation.
+ * Uses Haiku 4.5 for fast, cheap translation.
  */
 export async function translateText(
   text: string,
@@ -597,7 +600,7 @@ export async function translateText(
 
   const prompt = `Translate the following text into ${langName}:\n\n${text}`;
 
-  const TRANSLATION_MODEL: AIModel = "claude-sonnet-4-5-20250929";
+  const TRANSLATION_MODEL: AIModel = "claude-haiku-4-5-20251001";
   return await askClaude(system, prompt, 4096, TRANSLATION_MODEL);
 }
 
