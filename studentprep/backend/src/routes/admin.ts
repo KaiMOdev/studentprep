@@ -95,6 +95,17 @@ adminRoutes.get("/users", async (c) => {
     // user_profiles table may not exist yet
   }
 
+  // Get API key status per user
+  let apiKeyUserIds: string[] = [];
+  try {
+    const { data: keyRows } = await supabase
+      .from("user_api_keys")
+      .select("user_id");
+    apiKeyUserIds = (keyRows || []).map((r: any) => r.user_id);
+  } catch {
+    // table may not exist
+  }
+
   // Build counts maps
   const courseCountMap: Record<string, number> = {};
   for (const row of courseCounts || []) {
@@ -125,6 +136,7 @@ adminRoutes.get("/users", async (c) => {
     quizzes: quizCountMap[u.id] || 0,
     subscription: subMap[u.id] || { plan: "free", status: "inactive" },
     role: roleMap[u.id] || "user",
+    hasApiKey: apiKeyUserIds.includes(u.id),
   }));
 
   return c.json({ users: enrichedUsers });
@@ -189,6 +201,72 @@ adminRoutes.put("/users/:userId/plan", async (c) => {
   }
 
   return c.json({ success: true, userId: targetUserId, plan });
+});
+
+// DELETE /api/admin/users/:userId — Delete a user and all their data
+adminRoutes.delete("/users/:userId", async (c) => {
+  const targetUserId = c.req.param("userId");
+  const currentUserId = c.get("userId");
+
+  // Prevent self-deletion
+  if (targetUserId === currentUserId) {
+    return c.json({ error: "Cannot delete your own account" }, 400);
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  // 1. Delete user's API key (if any)
+  try {
+    await deleteUserApiKey(targetUserId);
+  } catch {
+    // Key may not exist — that's fine
+  }
+
+  // 2. Delete user's files from storage
+  try {
+    const { data: files } = await supabase.storage
+      .from("course-pdfs")
+      .list(targetUserId);
+    if (files && files.length > 0) {
+      const paths = files.map((f) => `${targetUserId}/${f.name}`);
+      await supabase.storage.from("course-pdfs").remove(paths);
+    }
+  } catch {
+    // Storage cleanup is best-effort
+  }
+
+  // 3. Delete user from Supabase Auth (cascades to all related tables via FK)
+  const { error } = await supabase.auth.admin.deleteUser(targetUserId);
+
+  if (error) {
+    return c.json({ error: `Failed to delete user: ${error.message}` }, 500);
+  }
+
+  return c.json({ success: true, userId: targetUserId });
+});
+
+// DELETE /api/admin/users/:userId/api-key — Disable (remove) a user's API key
+adminRoutes.delete("/users/:userId/api-key", async (c) => {
+  const targetUserId = c.req.param("userId");
+  const supabase = getSupabaseAdmin();
+
+  // Check if user exists
+  const { data: userData, error: userError } =
+    await supabase.auth.admin.getUserById(targetUserId);
+
+  if (userError || !userData?.user) {
+    return c.json({ error: "User not found" }, 404);
+  }
+
+  try {
+    await deleteUserApiKey(targetUserId);
+    return c.json({ success: true, userId: targetUserId });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Failed to disable API key" },
+      500
+    );
+  }
 });
 
 // GET /api/admin/config — System configuration status
