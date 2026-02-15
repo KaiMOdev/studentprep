@@ -222,17 +222,42 @@ adminRoutes.delete("/users/:userId", async (c) => {
     // Key may not exist — that's fine
   }
 
-  // 2. Delete user's files from storage
+  // 2. Delete ALL user's files from storage
+  // CRITICAL: User deletion will fail if they own any storage objects
   try {
-    const { data: files } = await supabase.storage
+    const { data: files, error: listError } = await supabase.storage
       .from("course-pdfs")
       .list(targetUserId);
-    if (files && files.length > 0) {
-      const paths = files.map((f) => `${targetUserId}/${f.name}`);
-      await supabase.storage.from("course-pdfs").remove(paths);
+
+    if (listError) {
+      console.error(`Failed to list storage files for user ${targetUserId}:`, listError);
+      return c.json({
+        error: `Cannot delete user: failed to list storage files. ${listError.message}`,
+      }, 500);
     }
-  } catch {
-    // Storage cleanup is best-effort
+
+    if (files && files.length > 0) {
+      // Delete all files in the user's folder
+      const paths = files.map((f) => `${targetUserId}/${f.name}`);
+      const { data: removed, error: removeError } = await supabase.storage
+        .from("course-pdfs")
+        .remove(paths);
+
+      if (removeError) {
+        console.error(`Failed to remove storage files for user ${targetUserId}:`, removeError);
+        return c.json({
+          error: `Cannot delete user: failed to remove ${files.length} storage file(s). ${removeError.message}. Please ensure all storage objects are deleted before deleting the user.`,
+        }, 500);
+      }
+
+      console.log(`Deleted ${removed?.length || 0} storage file(s) for user ${targetUserId}`);
+    }
+  } catch (storageErr) {
+    console.error(`Storage cleanup error for user ${targetUserId}:`, storageErr);
+    const errMsg = storageErr instanceof Error ? storageErr.message : "Unknown storage error";
+    return c.json({
+      error: `Cannot delete user: storage cleanup failed. ${errMsg}`,
+    }, 500);
   }
 
   // 3. Delete user from Supabase Auth (cascades to all related tables via FK)
