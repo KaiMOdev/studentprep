@@ -8,6 +8,7 @@ import Course from "./pages/Course";
 import StudyPlan from "./pages/StudyPlan";
 import Quiz from "./pages/Quiz";
 import AdminSettings from "./pages/AdminSettings";
+import Pricing from "./pages/Pricing";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -53,6 +54,10 @@ export default function App() {
       <Route
         path="/quiz/:courseId"
         element={user ? <Quiz /> : <Navigate to="/" />}
+      />
+      <Route
+        path="/pricing"
+        element={user ? <Pricing /> : <Navigate to="/" />}
       />
       <Route
         path="/admin/settings"

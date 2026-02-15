@@ -20,13 +20,15 @@ export function validateConfig(): ConfigStatus {
 
   const stripe =
     Boolean(process.env.STRIPE_SECRET_KEY) &&
-    Boolean(process.env.STRIPE_WEBHOOK_SECRET);
+    Boolean(process.env.STRIPE_WEBHOOK_SECRET) &&
+    Boolean(process.env.STRIPE_PRICE_ID);
 
   if (!process.env.SUPABASE_URL) missing.push("SUPABASE_URL");
   if (!process.env.SUPABASE_SERVICE_KEY) missing.push("SUPABASE_SERVICE_KEY");
   if (!process.env.ANTHROPIC_API_KEY) missing.push("ANTHROPIC_API_KEY");
   if (!process.env.STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
   if (!process.env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
+  if (!process.env.STRIPE_PRICE_ID) missing.push("STRIPE_PRICE_ID");
 
   // Minimum requirement: Supabase must be configured for the API to function
   const ready = supabase;

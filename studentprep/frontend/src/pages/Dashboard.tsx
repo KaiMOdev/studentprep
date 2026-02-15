@@ -177,6 +177,12 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <h1 className="text-xl font-extrabold tracking-tight text-indigo-600">StudyFlow</h1>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/pricing")}
+              className="btn-press rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100 transition"
+            >
+              Upgrade
+            </button>
             {isAdmin && (
               <button
                 onClick={() => navigate("/admin/settings")}
