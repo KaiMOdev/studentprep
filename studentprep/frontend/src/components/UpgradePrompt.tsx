@@ -30,12 +30,12 @@ export function UpgradePrompt({ title = "Upgrade to Pro", description, compact }
       </div>
       <h3 className="text-lg font-bold text-gray-900">{title}</h3>
       <p className="mt-2 text-sm text-gray-600">{description}</p>
-      <button
-        className="mt-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:from-amber-600 hover:to-orange-600 transition"
-        onClick={() => alert("Pro upgrade coming soon! Contact us for early access.")}
+      <a
+        href="/pricing"
+        className="mt-4 inline-block rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:from-amber-600 hover:to-orange-600 transition"
       >
         Upgrade to Pro
-      </button>
+      </a>
     </div>
   );
 }

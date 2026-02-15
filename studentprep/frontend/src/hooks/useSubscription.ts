@@ -4,6 +4,8 @@ import { apiFetch } from "../lib/api";
 export interface SubscriptionStatus {
   plan: "free" | "pro";
   status: string;
+  currentPeriodEnd: string | null;
+  hasStripeCustomer: boolean;
   limits: {
     maxTokensPerMonth: number | null;
   };

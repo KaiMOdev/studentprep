@@ -217,12 +217,12 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">AI Token Usage This Month</span>
               {subscription.plan === "free" && (
-                <button
-                  onClick={() => alert("Pro upgrade coming soon! Contact us for early access.")}
+                <a
+                  href="/pricing"
                   className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition"
                 >
                   Upgrade for unlimited
-                </button>
+                </a>
               )}
             </div>
             <TokenUsageMeter
