@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiFetch, apiFetchBlob } from "../lib/api";
+import { apiFetch, apiFetchBlob, UpgradeRequiredError } from "../lib/api";
+import { UpgradePrompt } from "../components/UpgradePrompt";
+import { useSubscriptionContext } from "../contexts/SubscriptionContext";
 
 interface KeyTerm {
   term: string;
@@ -194,6 +196,7 @@ function stepIndex(step: string): number {
 export default function Course() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { refresh: refreshSubscription } = useSubscriptionContext();
   const [course, setCourse] = useState<CourseData | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -201,6 +204,7 @@ export default function Course() {
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ProcessingProgress | null>(null);
   const [models, setModels] = useState<AIModelOption[]>(FALLBACK_MODELS);
   const [selectedModel, setSelectedModel] = useState<string>("claude-sonnet-4-5-20250929");
@@ -283,9 +287,14 @@ export default function Course() {
       });
       await loadCourse();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Processing failed");
+      if (err instanceof UpgradeRequiredError) {
+        setUpgradeError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Processing failed");
+      }
     } finally {
       setProcessing(false);
+      refreshSubscription();
     }
   };
 
@@ -312,11 +321,16 @@ export default function Course() {
       await apiFetch(`/api/ai/questions/${chapterId}`, { method: "POST" });
       await loadCourse();
     } catch (err) {
-      setGenerateError(
-        err instanceof Error ? err.message : "Failed to generate questions"
-      );
+      if (err instanceof UpgradeRequiredError) {
+        setUpgradeError(err.message);
+      } else {
+        setGenerateError(
+          err instanceof Error ? err.message : "Failed to generate questions"
+        );
+      }
     } finally {
       setGeneratingQuestions(null);
+      refreshSubscription();
     }
   };
 
@@ -331,11 +345,16 @@ export default function Course() {
       });
       await loadCourse();
     } catch (err) {
-      setSummarizeError(
-        err instanceof Error ? err.message : "Failed to summarize chapter"
-      );
+      if (err instanceof UpgradeRequiredError) {
+        setUpgradeError(err.message);
+      } else {
+        setSummarizeError(
+          err instanceof Error ? err.message : "Failed to summarize chapter"
+        );
+      }
     } finally {
       setSummarizingChapter(null);
+      refreshSubscription();
     }
   };
 
@@ -429,6 +448,12 @@ export default function Course() {
             Uploaded {new Date(course.created_at).toLocaleDateString("en-GB")}
           </p>
         </div>
+
+        {upgradeError && (
+          <div className="mb-4">
+            <UpgradePrompt description={upgradeError} compact />
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200 animate-fade-in-up">

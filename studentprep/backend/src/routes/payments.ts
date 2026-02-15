@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
+import { getUserSubscription, getMonthlyTokenUsage } from "../services/subscription.js";
+import { getLimits } from "../config/tierLimits.js";
 import type { AuthEnv } from "../types.js";
 
 export const paymentRoutes = new Hono<AuthEnv>();
@@ -19,5 +21,19 @@ paymentRoutes.post("/checkout", async (c) => {
 });
 
 paymentRoutes.get("/status", async (c) => {
-  return c.json({ plan: "free", status: "active" });
+  const userId = c.get("userId");
+  const sub = await getUserSubscription(userId);
+  const limits = getLimits(sub.plan);
+  const tokenUsage = await getMonthlyTokenUsage(userId);
+
+  return c.json({
+    plan: sub.plan,
+    status: sub.status,
+    limits: {
+      maxTokensPerMonth: limits.maxTokensPerMonth === Infinity ? null : limits.maxTokensPerMonth,
+    },
+    usage: {
+      tokensThisMonth: tokenUsage,
+    },
+  });
 });

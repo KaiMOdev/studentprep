@@ -8,9 +8,39 @@ import {
   generateQuestions,
   translateText,
   generateStudyPlan,
+  type UsageCallback,
 } from "../services/ai-pipeline.js";
-import { AI_MODELS, DEFAULT_MODEL, type AIModel } from "../services/claude.js";
+import { AI_MODELS, DEFAULT_MODEL, type AIModel, type ClaudeUsage } from "../services/claude.js";
+import { getUserSubscription, canUseTokens, recordTokenUsage } from "../services/subscription.js";
 import type { AuthEnv } from "../types.js";
+
+/** Helper: create a usage tracker that accumulates token counts. */
+function createUsageTracker() {
+  let totalInput = 0;
+  let totalOutput = 0;
+  const track: UsageCallback = (usage: ClaudeUsage) => {
+    totalInput += usage.input_tokens;
+    totalOutput += usage.output_tokens;
+  };
+  return {
+    track,
+    get inputTokens() { return totalInput; },
+    get outputTokens() { return totalOutput; },
+  };
+}
+
+/** Helper: check token budget and return 403 if exceeded. */
+async function checkTokenBudget(userId: string) {
+  const sub = await getUserSubscription(userId);
+  if (!(await canUseTokens(userId, sub.plan))) {
+    return {
+      error: "Monthly token limit reached. Upgrade to Pro for unlimited AI usage.",
+      code: "UPGRADE_REQUIRED" as const,
+      limit: "maxTokensPerMonth",
+    };
+  }
+  return null;
+}
 
 export const aiRoutes = new Hono<AuthEnv>();
 
@@ -89,6 +119,10 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
     return c.json({ error: "Course is already being processed" }, 409);
   }
 
+  // Check token budget before making any changes
+  const budgetError = await checkTokenBudget(userId);
+  if (budgetError) return c.json(budgetError, 403);
+
   // Clear old chapters/questions if retrying
   const { data: oldChapters } = await supabase
     .from("chapters")
@@ -119,7 +153,7 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
   }
 
   // Run pipeline in background (don't block the response)
-  processCourse(courseId, course.storage_path, model).catch(async (err) => {
+  processCourse(courseId, course.storage_path, model, userId).catch(async (err) => {
     processingProgress.delete(courseId);
 
     // Don't set error status if it was a cancellation
@@ -223,7 +257,15 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
     return c.json({ message: "Questions already generated" });
   }
 
-  const questions = await generateQuestions(chapter.title, chapter.raw_text);
+  // Check token budget
+  const budgetError = await checkTokenBudget(userId);
+  if (budgetError) return c.json(budgetError, 403);
+
+  const tracker = createUsageTracker();
+  const questions = await generateQuestions(chapter.title, chapter.raw_text, undefined, DEFAULT_MODEL, tracker.track);
+
+  // Record token usage
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "questions").catch(() => {});
 
   // Insert exam questions
   const examRows = questions.exam_questions.map((q) => ({
@@ -274,6 +316,10 @@ aiRoutes.post("/summarize-chapter/:chapterId", async (c) => {
     return c.json({ message: "Summary already generated", summary_main: chapter.summary_main, summary_side: chapter.summary_side });
   }
 
+  // Check token budget
+  const budgetError = await checkTokenBudget(userId);
+  if (budgetError) return c.json(budgetError, 403);
+
   // Parse model from request body
   let model: AIModel = DEFAULT_MODEL;
   try {
@@ -283,7 +329,11 @@ aiRoutes.post("/summarize-chapter/:chapterId", async (c) => {
     // No body or invalid JSON — use default model
   }
 
-  const summary = await summarizeChapter(chapter.title, chapter.raw_text, model);
+  const tracker = createUsageTracker();
+  const summary = await summarizeChapter(chapter.title, chapter.raw_text, model, tracker.track);
+
+  // Record token usage
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize-chapter").catch(() => {});
 
   // Update chapter with summary
   await supabase
@@ -340,9 +390,17 @@ aiRoutes.post("/translate", async (c) => {
     return c.json({ translation: existingTranslations[targetLang] });
   }
 
+  // Check token budget
+  const budgetError = await checkTokenBudget(userId);
+  if (budgetError) return c.json(budgetError, 403);
+
   // Translate the source text
   const sourceText = field === "question" ? question.question : question.suggested_answer;
-  const translation = await translateText(sourceText, targetLang);
+  const tracker = createUsageTracker();
+  const translation = await translateText(sourceText, targetLang, tracker.track);
+
+  // Record token usage
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "translate").catch(() => {});
 
   // Save translation to DB for future requests
   const updatedTranslations = { ...existingTranslations, [targetLang]: translation };
@@ -424,7 +482,15 @@ aiRoutes.post("/study-plan", async (c) => {
     return c.json({ error: "Course has no chapters. Process it first." }, 400);
   }
 
-  const plan = await generateStudyPlan(chapters, examDate, hoursPerDay);
+  // Check token budget
+  const budgetError = await checkTokenBudget(userId);
+  if (budgetError) return c.json(budgetError, 403);
+
+  const tracker = createUsageTracker();
+  const plan = await generateStudyPlan(chapters, examDate, hoursPerDay, DEFAULT_MODEL, tracker.track);
+
+  // Record token usage
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "study-plan").catch(() => {});
 
   // Save plan
   const { data: savedPlan, error: insertError } = await supabase
@@ -450,7 +516,8 @@ aiRoutes.post("/study-plan", async (c) => {
 async function processCourse(
   courseId: string,
   storagePath: string,
-  model: AIModel = DEFAULT_MODEL
+  model: AIModel = DEFAULT_MODEL,
+  userId?: string
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
 
@@ -489,7 +556,13 @@ async function processCourse(
     chapterTitle: "",
   });
 
-  const chapters = await detectChapters(fullText, model);
+  const tracker = createUsageTracker();
+  const chapters = await detectChapters(fullText, model, tracker.track);
+
+  // Record token usage for chapter detection
+  if (userId) {
+    await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize").catch(() => {});
+  }
 
   // 4. Save chapters (summaries and questions are generated on-demand by the user)
   processingProgress.set(courseId, {

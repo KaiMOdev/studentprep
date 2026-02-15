@@ -33,12 +33,22 @@ export const AI_MODELS: { id: AIModel; label: string }[] = [
 
 export const DEFAULT_MODEL: AIModel = "claude-sonnet-4-5-20250929";
 
-export async function askClaude(
+export interface ClaudeUsage {
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface ClaudeResponse {
+  text: string;
+  usage: ClaudeUsage;
+}
+
+export async function askClaudeWithUsage(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number = 8192,
   model: AIModel = DEFAULT_MODEL
-): Promise<string> {
+): Promise<ClaudeResponse> {
   const anthropic = getClient();
 
   try {
@@ -54,10 +64,14 @@ export async function askClaude(
       throw new Error("Unexpected response type from Claude");
     }
 
-    return block.text;
+    return {
+      text: block.text,
+      usage: {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      },
+    };
   } catch (err: unknown) {
-    // On authentication errors, reset the cached client so a corrected key
-    // (e.g. set via env after a hot-reload) will be picked up on the next call.
     if (err instanceof Anthropic.AuthenticationError) {
       client = null;
       throw new Error(
@@ -67,4 +81,14 @@ export async function askClaude(
     }
     throw err;
   }
+}
+
+export async function askClaude(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number = 8192,
+  model: AIModel = DEFAULT_MODEL
+): Promise<string> {
+  const result = await askClaudeWithUsage(systemPrompt, userMessage, maxTokens, model);
+  return result.text;
 }
