@@ -25,6 +25,7 @@ interface UserEntry {
   quizzes: number;
   subscription: { plan: string; status: string };
   role: string;
+  hasApiKey: boolean;
 }
 
 interface ConfigStatus {
@@ -118,6 +119,7 @@ export default function AdminSettings() {
   const [costMonth, setCostMonth] = useState(now.getMonth() + 1);
   const [costLoading, setCostLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -221,6 +223,39 @@ export default function AdminSettings() {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update plan");
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setUpdatingUser(userId);
+    try {
+      await apiFetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setConfirmDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleDisableApiKey = async (userId: string) => {
+    setUpdatingUser(userId);
+    try {
+      await apiFetch(`/api/admin/users/${userId}/api-key`, {
+        method: "DELETE",
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, hasApiKey: false } : u))
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to disable API key"
+      );
     } finally {
       setUpdatingUser(null);
     }
@@ -399,6 +434,12 @@ export default function AdminSettings() {
                         <th className="px-4 py-3 font-medium text-gray-700">
                           Role
                         </th>
+                        <th className="px-4 py-3 font-medium text-gray-700">
+                          API Key
+                        </th>
+                        <th className="px-4 py-3 font-medium text-gray-700">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -445,12 +486,62 @@ export default function AdminSettings() {
                               <option value="admin">Admin</option>
                             </select>
                           </td>
+                          <td className="px-4 py-3">
+                            {u.hasApiKey ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                                  Active
+                                </span>
+                                <button
+                                  onClick={() => handleDisableApiKey(u.id)}
+                                  disabled={updatingUser === u.id}
+                                  className="rounded border border-orange-300 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                                >
+                                  Disable
+                                </button>
+                              </span>
+                            ) : (
+                              <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                                None
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {confirmDelete === u.id ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="text-xs text-red-600">
+                                  Confirm?
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteUser(u.id)}
+                                  disabled={updatingUser === u.id}
+                                  className="rounded border border-red-400 bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDelete(null)}
+                                  className="rounded border border-gray-300 px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                                >
+                                  No
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDelete(u.id)}
+                                disabled={updatingUser === u.id}
+                                className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                       {users.length === 0 && (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={8}
                             className="px-4 py-8 text-center text-gray-500"
                           >
                             No users found
