@@ -12,20 +12,24 @@ import {
 } from "../services/ai-pipeline.js";
 import { AI_MODELS, DEFAULT_MODEL, type AIModel, type ClaudeUsage } from "../services/claude.js";
 import { getUserSubscription, canUseTokens, recordTokenUsage } from "../services/subscription.js";
+import { getUserApiKey } from "../services/api-keys.js";
 import type { AuthEnv } from "../types.js";
 
-/** Helper: create a usage tracker that accumulates token counts. */
+/** Helper: create a usage tracker that accumulates token counts and model info. */
 function createUsageTracker() {
   let totalInput = 0;
   let totalOutput = 0;
+  let lastModel: AIModel | undefined;
   const track: UsageCallback = (usage: ClaudeUsage) => {
     totalInput += usage.input_tokens;
     totalOutput += usage.output_tokens;
+    lastModel = usage.model;
   };
   return {
     track,
     get inputTokens() { return totalInput; },
     get outputTokens() { return totalOutput; },
+    get model() { return lastModel; },
   };
 }
 
@@ -40,6 +44,16 @@ async function checkTokenBudget(userId: string) {
     };
   }
   return null;
+}
+
+/** Helper: resolve user's API key (returns undefined if none stored). */
+async function resolveUserApiKey(userId: string): Promise<string | undefined> {
+  try {
+    const key = await getUserApiKey(userId);
+    return key ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export const aiRoutes = new Hono<AuthEnv>();
@@ -152,8 +166,11 @@ aiRoutes.post("/summarize/:courseId", async (c) => {
     // No body or invalid JSON — use default model
   }
 
+  // Resolve user API key
+  const userApiKey = await resolveUserApiKey(userId);
+
   // Run pipeline in background (don't block the response)
-  processCourse(courseId, course.storage_path, model, userId).catch(async (err) => {
+  processCourse(courseId, course.storage_path, model, userId, userApiKey).catch(async (err) => {
     processingProgress.delete(courseId);
 
     // Don't set error status if it was a cancellation
@@ -261,11 +278,12 @@ aiRoutes.post("/questions/:chapterId", async (c) => {
   const budgetError = await checkTokenBudget(userId);
   if (budgetError) return c.json(budgetError, 403);
 
+  const userApiKey = await resolveUserApiKey(userId);
   const tracker = createUsageTracker();
-  const questions = await generateQuestions(chapter.title, chapter.raw_text, undefined, DEFAULT_MODEL, tracker.track);
+  const questions = await generateQuestions(chapter.title, chapter.raw_text, undefined, DEFAULT_MODEL, tracker.track, userApiKey);
 
-  // Record token usage
-  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "questions").catch(() => {});
+  // Record token usage with model info
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "questions", tracker.model).catch(() => {});
 
   // Insert exam questions
   const examRows = questions.exam_questions.map((q) => ({
@@ -329,11 +347,12 @@ aiRoutes.post("/summarize-chapter/:chapterId", async (c) => {
     // No body or invalid JSON — use default model
   }
 
+  const userApiKey = await resolveUserApiKey(userId);
   const tracker = createUsageTracker();
-  const summary = await summarizeChapter(chapter.title, chapter.raw_text, model, tracker.track);
+  const summary = await summarizeChapter(chapter.title, chapter.raw_text, model, tracker.track, userApiKey);
 
-  // Record token usage
-  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize-chapter").catch(() => {});
+  // Record token usage with model info
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize-chapter", tracker.model).catch(() => {});
 
   // Update chapter with summary
   await supabase
@@ -396,11 +415,12 @@ aiRoutes.post("/translate", async (c) => {
 
   // Translate the source text
   const sourceText = field === "question" ? question.question : question.suggested_answer;
+  const userApiKey = await resolveUserApiKey(userId);
   const tracker = createUsageTracker();
-  const translation = await translateText(sourceText, targetLang, tracker.track);
+  const translation = await translateText(sourceText, targetLang, tracker.track, userApiKey);
 
-  // Record token usage
-  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "translate").catch(() => {});
+  // Record token usage with model info
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "translate", tracker.model).catch(() => {});
 
   // Save translation to DB for future requests
   const updatedTranslations = { ...existingTranslations, [targetLang]: translation };
@@ -486,11 +506,12 @@ aiRoutes.post("/study-plan", async (c) => {
   const budgetError = await checkTokenBudget(userId);
   if (budgetError) return c.json(budgetError, 403);
 
+  const userApiKey = await resolveUserApiKey(userId);
   const tracker = createUsageTracker();
-  const plan = await generateStudyPlan(chapters, examDate, hoursPerDay, DEFAULT_MODEL, tracker.track);
+  const plan = await generateStudyPlan(chapters, examDate, hoursPerDay, DEFAULT_MODEL, tracker.track, userApiKey);
 
-  // Record token usage
-  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "study-plan").catch(() => {});
+  // Record token usage with model info
+  await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "study-plan", tracker.model).catch(() => {});
 
   // Save plan
   const { data: savedPlan, error: insertError } = await supabase
@@ -517,7 +538,8 @@ async function processCourse(
   courseId: string,
   storagePath: string,
   model: AIModel = DEFAULT_MODEL,
-  userId?: string
+  userId?: string,
+  userApiKey?: string
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
 
@@ -557,11 +579,11 @@ async function processCourse(
   });
 
   const tracker = createUsageTracker();
-  const chapters = await detectChapters(fullText, model, tracker.track);
+  const chapters = await detectChapters(fullText, model, tracker.track, userApiKey);
 
-  // Record token usage for chapter detection
+  // Record token usage for chapter detection with model info
   if (userId) {
-    await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize").catch(() => {});
+    await recordTokenUsage(userId, tracker.inputTokens, tracker.outputTokens, "summarize", tracker.model).catch(() => {});
   }
 
   // 4. Save chapters (summaries and questions are generated on-demand by the user)

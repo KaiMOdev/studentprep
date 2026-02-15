@@ -24,6 +24,11 @@ function getClient(): Anthropic {
   return client;
 }
 
+/** Create a temporary Anthropic client using a user-provided API key. */
+function createUserClient(apiKey: string): Anthropic {
+  return new Anthropic({ apiKey });
+}
+
 export type AIModel = "claude-sonnet-4-5-20250929" | "claude-haiku-4-5-20251001";
 
 export const AI_MODELS: { id: AIModel; label: string }[] = [
@@ -35,6 +40,7 @@ export const DEFAULT_MODEL: AIModel = "claude-sonnet-4-5-20250929";
 export interface ClaudeUsage {
   input_tokens: number;
   output_tokens: number;
+  model: AIModel;
 }
 
 export interface ClaudeResponse {
@@ -42,13 +48,17 @@ export interface ClaudeResponse {
   usage: ClaudeUsage;
 }
 
+/**
+ * Call Claude with usage tracking. Optionally uses a user-provided API key.
+ */
 export async function askClaudeWithUsage(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number = 8192,
-  model: AIModel = DEFAULT_MODEL
+  model: AIModel = DEFAULT_MODEL,
+  userApiKey?: string
 ): Promise<ClaudeResponse> {
-  const anthropic = getClient();
+  const anthropic = userApiKey ? createUserClient(userApiKey) : getClient();
 
   try {
     const response = await anthropic.messages.create({
@@ -68,14 +78,17 @@ export async function askClaudeWithUsage(
       usage: {
         input_tokens: response.usage.input_tokens,
         output_tokens: response.usage.output_tokens,
+        model,
       },
     };
   } catch (err: unknown) {
     if (err instanceof Anthropic.AuthenticationError) {
-      client = null;
+      if (!userApiKey) client = null;
       throw new Error(
-        "Anthropic API authentication failed — the configured ANTHROPIC_API_KEY is invalid. " +
-          "Check your studentprep/backend/.env file and restart the server."
+        userApiKey
+          ? "Your personal Anthropic API key is invalid. Please update it in settings."
+          : "Anthropic API authentication failed — the configured ANTHROPIC_API_KEY is invalid. " +
+            "Check your studentprep/backend/.env file and restart the server."
       );
     }
     throw err;
@@ -86,8 +99,9 @@ export async function askClaude(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number = 8192,
-  model: AIModel = DEFAULT_MODEL
+  model: AIModel = DEFAULT_MODEL,
+  userApiKey?: string
 ): Promise<string> {
-  const result = await askClaudeWithUsage(systemPrompt, userMessage, maxTokens, model);
+  const result = await askClaudeWithUsage(systemPrompt, userMessage, maxTokens, model, userApiKey);
   return result.text;
 }

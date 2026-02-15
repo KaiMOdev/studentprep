@@ -8,7 +8,7 @@ import { quizRoutes } from "./routes/quiz.js";
 import { paymentRoutes } from "./routes/payments.js";
 import { pdfRoutes } from "./routes/pdf.js";
 import { wikiRoutes } from "./routes/wiki.js";
-import { adminRoutes, authMeRoutes } from "./routes/admin.js";
+import { adminRoutes, authMeRoutes, apiKeyRoutes } from "./routes/admin.js";
 import { validateConfig, logConfigStatus } from "./services/config.js";
 import { isAnthropicConfigured } from "./services/claude.js";
 
@@ -87,6 +87,7 @@ app.route("/api/payments", paymentRoutes);
 app.route("/api/pdf", pdfRoutes);
 app.route("/api/chapters", wikiRoutes);
 app.route("/api/admin", adminRoutes);
+app.route("/api/api-keys", apiKeyRoutes);
 app.route("/api/auth", authMeRoutes);
 
 // Start server

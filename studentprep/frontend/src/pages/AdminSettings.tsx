@@ -36,7 +36,68 @@ interface ConfigStatus {
   adminEmails: number;
 }
 
-type Tab = "overview" | "users" | "system";
+interface UserCostEntry {
+  userId: string;
+  email: string;
+  year: number;
+  month: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  hasApiKey: boolean;
+  byModel: Record<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number;
+    }
+  >;
+}
+
+interface CostOverview {
+  year: number;
+  month: number;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  users: UserCostEntry[];
+}
+
+type Tab = "overview" | "users" | "costs" | "system";
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const MODEL_LABELS: Record<string, string> = {
+  "claude-sonnet-4-5-20250929": "Sonnet 4.5",
+  "claude-haiku-4-5-20251001": "Haiku 4.5",
+  unknown: "Unknown",
+};
+
+function formatCost(usd: number): string {
+  if (usd < 0.01 && usd > 0) return "<$0.01";
+  return `$${usd.toFixed(2)}`;
+}
+
+function formatTokens(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
 
 export default function AdminSettings() {
   const { user, signOut } = useAuth();
@@ -46,9 +107,17 @@ export default function AdminSettings() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [config, setConfig] = useState<ConfigStatus | null>(null);
+  const [costData, setCostData] = useState<CostOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
+
+  // Cost tab: month/year navigation
+  const now = new Date();
+  const [costYear, setCostYear] = useState(now.getFullYear());
+  const [costMonth, setCostMonth] = useState(now.getMonth() + 1);
+  const [costLoading, setCostLoading] = useState(false);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -77,6 +146,25 @@ export default function AdminSettings() {
     }
   }, []);
 
+  const loadCosts = useCallback(
+    async (year: number, month: number) => {
+      setCostLoading(true);
+      try {
+        const data = await apiFetch<CostOverview>(
+          `/api/admin/costs?year=${year}&month=${month}`
+        );
+        setCostData(data);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load cost data"
+        );
+      } finally {
+        setCostLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     setLoading(true);
     setError("");
@@ -84,6 +172,13 @@ export default function AdminSettings() {
       setLoading(false)
     );
   }, [loadStats, loadUsers, loadConfig]);
+
+  // Load costs when tab switches to costs or month changes
+  useEffect(() => {
+    if (activeTab === "costs") {
+      loadCosts(costYear, costMonth);
+    }
+  }, [activeTab, costYear, costMonth, loadCosts]);
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdatingUser(userId);
@@ -131,11 +226,36 @@ export default function AdminSettings() {
     }
   };
 
+  const goToPrevMonth = () => {
+    if (costMonth === 1) {
+      setCostMonth(12);
+      setCostYear(costYear - 1);
+    } else {
+      setCostMonth(costMonth - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    const isCurrentMonth =
+      costYear === now.getFullYear() && costMonth === now.getMonth() + 1;
+    if (isCurrentMonth) return;
+    if (costMonth === 12) {
+      setCostMonth(1);
+      setCostYear(costYear + 1);
+    } else {
+      setCostMonth(costMonth + 1);
+    }
+  };
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "users", label: "Users" },
+    { key: "costs", label: "Costs" },
     { key: "system", label: "System" },
   ];
+
+  const isCurrentMonth =
+    costYear === now.getFullYear() && costMonth === now.getMonth() + 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -343,6 +463,156 @@ export default function AdminSettings() {
               </div>
             )}
 
+            {/* Costs Tab */}
+            {activeTab === "costs" && (
+              <div className="space-y-6">
+                {/* Month navigation */}
+                <div className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm">
+                  <button
+                    onClick={goToPrevMonth}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {MONTH_NAMES[costMonth - 1]} {costYear}
+                  </h3>
+                  <button
+                    onClick={goToNextMonth}
+                    disabled={isCurrentMonth}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                {costLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+                  </div>
+                ) : costData ? (
+                  <>
+                    {/* Summary cards */}
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      <div className="rounded-lg bg-white p-4 shadow-sm">
+                        <p className="text-sm text-gray-500">Total Cost</p>
+                        <p className="mt-1 text-2xl font-bold text-red-600">
+                          {formatCost(costData.totalCostUsd)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-white p-4 shadow-sm">
+                        <p className="text-sm text-gray-500">Active Users</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">
+                          {costData.users.length}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-white p-4 shadow-sm">
+                        <p className="text-sm text-gray-500">Input Tokens</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">
+                          {formatTokens(costData.totalInputTokens)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-white p-4 shadow-sm">
+                        <p className="text-sm text-gray-500">Output Tokens</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">
+                          {formatTokens(costData.totalOutputTokens)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Pricing reference */}
+                    <div className="rounded-lg bg-indigo-50 p-4">
+                      <h4 className="mb-2 text-sm font-medium text-indigo-800">
+                        Anthropic API Pricing (per million tokens)
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-xs text-indigo-700 sm:grid-cols-3">
+                        <div>
+                          <span className="font-medium">Sonnet 4.5:</span>{" "}
+                          $3/MTok input, $15/MTok output
+                        </div>
+                        <div>
+                          <span className="font-medium">Haiku 4.5:</span>{" "}
+                          $1/MTok input, $5/MTok output
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Per-user cost table */}
+                    <div className="rounded-lg bg-white shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b bg-gray-50">
+                              <th className="px-4 py-3 font-medium text-gray-700">
+                                User
+                              </th>
+                              <th className="px-4 py-3 text-right font-medium text-gray-700">
+                                Input Tokens
+                              </th>
+                              <th className="px-4 py-3 text-right font-medium text-gray-700">
+                                Output Tokens
+                              </th>
+                              <th className="px-4 py-3 text-right font-medium text-gray-700">
+                                Est. Cost
+                              </th>
+                              <th className="px-4 py-3 text-center font-medium text-gray-700">
+                                Own Key
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {costData.users.map((u) => (
+                              <UserCostRow
+                                key={u.userId}
+                                user={u}
+                                isExpanded={expandedUser === u.userId}
+                                onToggle={() =>
+                                  setExpandedUser(
+                                    expandedUser === u.userId
+                                      ? null
+                                      : u.userId
+                                  )
+                                }
+                              />
+                            ))}
+                            {costData.users.length === 0 && (
+                              <tr>
+                                <td
+                                  colSpan={5}
+                                  className="px-4 py-8 text-center text-gray-500"
+                                >
+                                  No usage data for this month
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                          {costData.users.length > 0 && (
+                            <tfoot>
+                              <tr className="border-t-2 bg-gray-50 font-medium">
+                                <td className="px-4 py-3 text-gray-900">
+                                  Total
+                                </td>
+                                <td className="px-4 py-3 text-right text-gray-900">
+                                  {formatTokens(costData.totalInputTokens)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-gray-900">
+                                  {formatTokens(costData.totalOutputTokens)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-bold text-red-600">
+                                  {formatCost(costData.totalCostUsd)}
+                                </td>
+                                <td />
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+
             {/* System Tab */}
             {activeTab === "system" && config && (
               <div className="space-y-6">
@@ -406,6 +676,8 @@ export default function AdminSettings() {
   );
 }
 
+// ─── Subcomponents ───────────────────────────────────────────────────────────
+
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg bg-white p-4 shadow-sm">
@@ -462,5 +734,92 @@ function ServiceRow({
         {connected ? "Connected" : "Not configured"}
       </span>
     </div>
+  );
+}
+
+function UserCostRow({
+  user,
+  isExpanded,
+  onToggle,
+}: {
+  user: UserCostEntry;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const modelEntries = Object.entries(user.byModel);
+
+  return (
+    <>
+      <tr
+        className="cursor-pointer border-b hover:bg-gray-50 last:border-b-0"
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block text-xs transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            >
+              &#9654;
+            </span>
+            <div>
+              <div className="font-medium">{user.email}</div>
+              <div className="text-xs text-gray-400">
+                {user.userId.slice(0, 8)}...
+              </div>
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-3 text-right tabular-nums text-gray-600">
+          {formatTokens(user.inputTokens)}
+        </td>
+        <td className="px-4 py-3 text-right tabular-nums text-gray-600">
+          {formatTokens(user.outputTokens)}
+        </td>
+        <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+          {formatCost(user.estimatedCostUsd)}
+        </td>
+        <td className="px-4 py-3 text-center">
+          {user.hasApiKey ? (
+            <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              Yes
+            </span>
+          ) : (
+            <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+              No
+            </span>
+          )}
+        </td>
+      </tr>
+      {isExpanded && modelEntries.length > 0 && (
+        <tr className="border-b bg-gray-50/50">
+          <td colSpan={5} className="px-4 py-3">
+            <div className="ml-6 space-y-1">
+              <p className="mb-2 text-xs font-medium text-gray-500">
+                Cost by model:
+              </p>
+              {modelEntries.map(([model, data]) => (
+                <div
+                  key={model}
+                  className="flex items-center justify-between text-xs text-gray-600"
+                >
+                  <span className="font-medium">
+                    {MODEL_LABELS[model] || model}
+                  </span>
+                  <span className="flex gap-4">
+                    <span>
+                      {formatTokens(data.inputTokens)} in /{" "}
+                      {formatTokens(data.outputTokens)} out
+                    </span>
+                    <span className="w-16 text-right font-medium text-gray-900">
+                      {formatCost(data.costUsd)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
